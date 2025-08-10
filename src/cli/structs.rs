@@ -1,8 +1,6 @@
-pub mod parser;
-
+use super::parser;
 use crate::err_exit;
 use chrono::{Datelike, Local, NaiveDate};
-use parser::named_parse;
 use std::collections::HashSet;
 
 #[derive(Debug)]
@@ -12,9 +10,9 @@ pub struct Field<T> {
 
 #[derive(Debug)]
 pub struct Date {
-    pub year: Option<u16>,
-    pub month: Option<u8>,
-    pub day: Option<u8>,
+    pub year: Option<i32>,
+    pub month: Option<u32>,
+    pub day: Option<u32>,
 }
 
 #[derive(Debug)]
@@ -51,7 +49,10 @@ impl<T> Field<T> {
         self.value.clone().unwrap_or(default)
     }
 
-    pub fn unwrap(&self) -> T where T: Clone, {
+    pub fn unwrap(&self) -> T
+    where
+        T: Clone,
+    {
         self.value.clone().unwrap()
     }
 
@@ -74,7 +75,6 @@ impl<T> Field<T> {
     pub fn is_none(&self) -> bool {
         self.value.is_none()
     }
-
 }
 
 impl Date {
@@ -86,34 +86,34 @@ impl Date {
         }
     }
 
-    pub fn year_or_now(&self) -> u16 {
+    pub fn year_or_now(&self) -> i32 {
         if self.year.is_some() {
             self.year.unwrap()
         } else {
-            Local::now().year() as u16 
+            Local::now().year()
         }
     }
 
-    pub fn month_or_now(&self) -> u8 {
+    pub fn month_or_now(&self) -> u32 {
         if self.month.is_some() {
             self.month.unwrap()
         } else {
-            Local::now().month() as u8 
+            Local::now().month()
         }
     }
 
-    pub fn day_or_now(&self) -> u8 {
+    pub fn day_or_now(&self) -> u32 {
         if self.day.is_some() {
             self.day.unwrap()
         } else {
-            Local::now().day() as u8 
+            Local::now().day()
         }
     }
 
     pub fn is_valid_date(&self) -> bool {
-        let year = self.year_or_now() as i32;
-        let month = self.month_or_now() as u32;
-        let day = self.day_or_now() as u32;
+        let year = self.year_or_now();
+        let month = self.month_or_now();
+        let day = self.day_or_now();
 
         if let Some(date) = NaiveDate::from_ymd_opt(year, month, day) {
             let today = Local::now().naive_local().date();
@@ -148,12 +148,12 @@ impl Date {
             err_exit!("Multiple year input");
         }
 
-        let parsed_year: u16;
+        let parsed_year: i32;
 
         if val == "prev" {
-            let current_year = chrono::Local::now().year() as u16;
+            let current_year = chrono::Local::now().year();
             parsed_year = current_year - 1;
-        } else if let Ok(number) = val.parse::<u16>() {
+        } else if let Ok(number) = val.parse::<i32>() {
             parsed_year = number;
         } else {
             err_exit!(format!(
@@ -169,16 +169,16 @@ impl Date {
             err_exit!("Multiple month input");
         }
 
-        let parsed_month: u8;
+        let parsed_month: u32;
 
         if val == "prev" {
-            let current_month = Local::now().month() as u8;
+            let current_month = Local::now().month();
             if current_month > 1 {
                 parsed_month = current_month - 1;
             } else {
                 parsed_month = 12;
             }
-        } else if let Ok(number) = val.parse::<u8>() {
+        } else if let Ok(number) = val.parse::<u32>() {
             parsed_month = number;
         } else {
             err_exit!(format!(
@@ -194,11 +194,11 @@ impl Date {
             err_exit!("Multiple day input");
         }
 
-        let parsed_day: u8;
+        let parsed_day: u32;
 
         if val == "prev" {
             let today = Local::now().naive_local().date();
-            let current_day = today.day() as u8;
+            let current_day = today.day();
 
             if current_day > 1 {
                 parsed_day = current_day - 1;
@@ -229,7 +229,7 @@ impl Date {
 
                 parsed_day = days_in_prev_month;
             }
-        } else if let Ok(number) = val.parse::<u8>() {
+        } else if let Ok(number) = val.parse::<u32>() {
             parsed_day = number;
         } else {
             err_exit!(format!(
@@ -238,6 +238,14 @@ impl Date {
         }
 
         self.day = Some(parsed_day);
+    }
+
+    pub fn to_naive(&self) -> NaiveDate {
+        NaiveDate::from_ymd_opt(
+            self.year_or_now(),
+            self.month_or_now(),
+            self.day_or_now(),
+        ).unwrap()
     }
 
     fn is_leap_year(year: i32) -> bool {
@@ -287,13 +295,13 @@ impl Command {
                         .funk
                         .set_or_err(Some("list".to_string()), "multiple command input.");
                 }
-                "bike" | "buy" | "lub" | "ride" => {
+                "buy" | "lub" | "ride" => {
                     command
                         .object
                         .set_or_err(Some(arg), "multiple object input.");
                 }
                 s if s.contains(':') => {
-                    command = named_parse(command, arg);
+                    command = parser::named_parse(command, arg);
                 }
                 // after s.contains(':') is important!!!
                 s if s.matches('-').count() == 2 => {
@@ -331,6 +339,10 @@ impl Command {
                     }
                 }
             }
+        }
+
+        if !command.date.is_valid_date() {
+            err_exit!("Non valid date given.");
         }
 
         command

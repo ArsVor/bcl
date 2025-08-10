@@ -1,4 +1,4 @@
-use crate::structs::Command;
+use super::structs::Command;
 use crate::err_exit;
 
 pub fn get_bicycle_types() -> Vec<String> {
@@ -34,43 +34,57 @@ pub fn named_parse(mut command: Command, arg: String) -> Command {
     if is_bike_type(key) {
         if !val.is_empty() {
             if let Ok(number) = val.parse::<u8>() {
-                command.bike_id.set_or_err(Some(number), "multiple bike id input.");
+                command
+                    .bike_id
+                    .set_or_err(Some(number), "multiple bike id input.");
             } else {
-                err_exit!(format!("Wrong value of '{key}'. Expected integer, but given '{val}'"));
+                err_exit!(format!(
+                    "Wrong value of '{key}'. Expected integer, but given '{val}'"
+                ));
             }
         }
-        command.category.set_or_err(Some(key.to_string()), "multiple bike type input.");
+        command
+            .category
+            .set_or_err(Some(key.to_string()), "multiple bike type input.");
     } else if !val.is_empty() && val != "now" {
         match key {
             "year" => {
                 command.date.year_from_str(val);
-            },
+            }
             "month" => {
                 command.date.month_from_str(val);
-            },
+            }
             "day" => {
                 command.date.day_from_str(val);
-            },
+            }
             "date" => {
                 command.date.from_str(val);
-            },
+            }
             "lt" => {
                 command.lt.from_str(val);
-            },
+            }
             "gt" => {
                 command.gt.from_str(val);
-            },
-            "cat" => {
-                command.object.set_or_err(Some(key.to_string()), "multiple object input.");
-                command.category.set_or_err(Some(val.to_string()), "multiple bike type input.");
-            },
+            }
+            "cat" | "bike" => {
+                command
+                    .object
+                    .set_or_err(Some(key.to_string()), "multiple object input.");
+                command
+                    .category
+                    .set_or_err(Some(val.to_string()), "multiple bike type input.");
+            }
             "val" => {
                 if let Ok(number) = val.parse::<f32>() {
-                    command.val.set_or_err(Some(number), "multiple value input.");
+                    command
+                        .val
+                        .set_or_err(Some(number), "multiple value input.");
                 } else {
-                    err_exit!(format!("Wrong value of '{key}'. Expected float, but given '{val}'"));
+                    err_exit!(format!(
+                        "Wrong value of '{key}'. Expected float, but given '{val}'"
+                    ));
                 }
-            },
+            }
             _ => {
                 err_exit!(format!("Unexpected key - '{key}'."));
             }
