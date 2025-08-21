@@ -19,6 +19,7 @@ fn main() {
         let funk = command.funk.unwrap();
         let _ = match funk.as_str() {
             "add" => handlers::add::route(conn, command),
+            "list" => handlers::list::route(conn, command),
             _ => Ok(()),
         };
         // println!("{:?}", db::queries::get_category(&conn, "G"))

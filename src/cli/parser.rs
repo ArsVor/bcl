@@ -46,7 +46,7 @@ pub fn named_parse(mut command: Command, arg: String) -> Command {
         command
             .category
             .set_or_err(Some(key.to_string()), "multiple bike type input.");
-    } else if !val.is_empty() && val != "now" {
+    } else if !val.is_empty() {
         match key {
             "year" => {
                 command.date.year_from_str(val);

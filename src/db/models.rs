@@ -1,28 +1,44 @@
 use chrono::NaiveDate;
-use rusqlite_from_row::FromRow;
+use rusqlite::{Connection, Result, Row};
+use std::fmt;
+use tabled::Tabled;
 
-#[derive(Debug, FromRow)]
+#[derive(Debug, Clone)]
+pub struct Opt<T>(pub Option<T>);
+
+#[derive(Debug, Clone, Tabled)]
 pub struct Category {
     pub id: i32,
     pub abbr: String,
     pub name: String,
 }
 
-#[derive(Debug, FromRow)]
+#[derive(Debug, Clone, Tabled)]
 pub struct Tag {
     pub id: i32,
     pub name: String,
 }
 
-#[derive(Debug, FromRow)]
+#[derive(Debug, Clone, Tabled)]
 pub struct Buy {
     pub id: i32,
     pub name: String,
     pub price: f32,
-    pub datastamp: NaiveDate,
+    pub datestamp: NaiveDate,
 }
 
-#[derive(Debug, FromRow)]
+#[derive(Debug, Clone, Tabled)]
+pub struct BuyList {
+    pub id: i32,
+    pub buy_id: i32,
+    pub vehicle: String,
+    pub tags: String,
+    pub name: String,
+    pub price: f32,
+    pub date: NaiveDate,
+}
+
+#[derive(Debug, Clone, Tabled)]
 pub struct Bike {
     pub id: i32,
     pub category_id: i32,
@@ -30,47 +46,155 @@ pub struct Bike {
     pub datestamp: NaiveDate,
 }
 
-#[derive(Debug, FromRow)]
+#[derive(Debug, Clone, Tabled)]
+pub struct BikeList {
+    pub id: i32,
+    pub bike_id: i32,
+    pub category: String,
+    pub bike: String,
+    pub added: NaiveDate,
+}
+
+#[derive(Debug, Clone, Tabled)]
 pub struct Ride {
     pub id: i32,
     pub bike_id: i32,
     pub datestamp: NaiveDate,
     pub distance: f32,
-    pub annotate: Option<String>,
+    pub annotate: Opt<String>,
 }
 
-#[derive(Debug, FromRow)]
+#[derive(Debug, Clone, Tabled)]
 pub struct ChainLubrication {
     pub id: i32,
     pub bike_id: i32,
     pub datestamp: NaiveDate,
-    pub annotate: Option<String>,
+    pub annotate: Opt<String>,
 }
 
-#[derive(Debug, FromRow)]
+#[derive(Debug, Clone, Tabled)]
 pub struct TagToRide {
     pub id: i32,
     pub tag_id: i32,
     pub bike_id: i32,
 }
 
-#[derive(Debug, FromRow)]
+#[derive(Debug, Clone, Tabled)]
 pub struct TagToBuy {
     pub id: i32,
     pub tag_id: i32,
     pub buy_id: i32,
 }
 
-#[derive(Debug, FromRow)]
+#[derive(Debug, Clone, Tabled)]
 pub struct BuyToBike {
     pub id: i32,
     pub buy_id: i32,
     pub bike_id: i32,
 }
 
-#[derive(Debug, FromRow)]
+#[derive(Debug, Clone, Tabled)]
 pub struct BuyToCategory {
     pub id: i32,
     pub buy_id: i32,
     pub category_id: i32,
+}
+
+impl<T: fmt::Display> fmt::Display for Opt<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.0 {
+            Some(v) => write!(f, "{}", &v),
+            None => write!(f, "—"), // тут можна поставити "" або будь-що
+        }
+    }
+}
+
+impl Category {
+    pub fn from_row(row: &Row) -> Result<Self> {
+        Ok(Self {
+            id: row.get("id")?,
+            abbr: row.get("abbr")?,
+            name: row.get("name")?,
+        })
+    }
+}
+
+impl Tag {
+    pub fn from_row(row: &Row) -> Result<Self> {
+        Ok(Self {
+            id: row.get("id")?,
+            name: row.get("name")?,
+        })
+    }
+}
+
+impl Buy {
+    pub fn from_row(row: &Row) -> Result<Self> {
+        Ok(Self {
+            id: row.get("id")?,
+            name: row.get("name")?,
+            price: row.get("price")?,
+            datestamp: row.get("datestamp")?,
+        })
+    }
+}
+
+impl BuyList {
+    pub fn from_row(row: &Row) -> Result<Self> {
+        Ok(Self {
+            id: row.get(6)?,
+            buy_id: row.get(0)?,
+            vehicle: row.get(5)?,
+            tags: row.get(4)?,
+            name: row.get(1)?,
+            price: row.get(2)?,
+            date: row.get(3)?,
+        })
+    }
+}
+
+impl Bike {
+    pub fn from_row(row: &Row) -> Result<Self> {
+        Ok(Self {
+            id: row.get("id")?,
+            category_id: row.get("category_id")?,
+            name: row.get("name")?,
+            datestamp: row.get("datestamp")?,
+        })
+    }
+}
+
+impl BikeList {
+    pub fn from_row(row: &Row) -> Result<Self> {
+        Ok(Self {
+            id: row.get("row_num")?,
+            bike_id: row.get("id")?,
+            category: row.get("abbr")?,
+            bike: row.get("name")?,
+            added: row.get("datestamp")?,
+        })
+    }
+}
+
+impl Ride {
+    pub fn from_row(row: &Row) -> Result<Self> {
+        Ok(Self {
+            id: row.get("id")?,
+            bike_id: row.get("bike_id")?,
+            datestamp: row.get("datestamp")?,
+            distance: row.get("distance")?,
+            annotate: Opt(row.get::<_, Option<String>>("annotate")?),
+        })
+    }
+}
+
+impl ChainLubrication {
+    pub fn from_row(row: &Row) -> Result<Self> {
+        Ok(Self {
+            id: row.get("id")?,
+            bike_id: row.get("bike_id")?,
+            datestamp: row.get("datestamp")?,
+            annotate: Opt(row.get::<_, Option<String>>("annotate")?),
+        })
+    }
 }

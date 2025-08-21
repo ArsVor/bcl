@@ -109,7 +109,7 @@ fn create_tag_to_ride_table(conn: &Connection) -> Result<()> {
 
 fn create_tag_to_buy_table(conn: &Connection) -> Result<()> {
     conn.execute(
-        "CREATE TABLE IF NOT EXISTS tag_tu_buy(
+        "CREATE TABLE IF NOT EXISTS tag_to_buy(
             id          INTEGER PRIMARY KEY,
             tag_id      INTEGER NOT NULL,
             buy_id      INTEGER NOT NULL,
@@ -141,7 +141,7 @@ fn create_buy_to_category_table(conn: &Connection) -> Result<()> {
             id              INTEGER PRIMARY KEY,
             buy_id          INTEGER NOT NULL,
             category_id     INTEGER NOT NULL,
-            FOREIGN KEY(buy_id) REFERENCES buy(buy_id) ON DELETE CASCADE,
+            FOREIGN KEY(buy_id) REFERENCES buy(id) ON DELETE CASCADE,
             FOREIGN KEY(category_id) REFERENCES category(id) ON DELETE CASCADE
         )",
         [],

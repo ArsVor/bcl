@@ -1,7 +1,8 @@
 #[macro_export]
 macro_rules! err_exit {
     ($msg:expr) => {
-        println!("ERROR: {}", $msg);
+        use owo_colors::OwoColorize;
+        println!("{}", format!("ERROR: {}", $msg).red());
         std::process::exit(1)
     };
 }

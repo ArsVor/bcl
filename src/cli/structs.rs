@@ -1,21 +1,21 @@
 use super::parser;
 use crate::err_exit;
 use chrono::{Datelike, Local, NaiveDate};
-use std::collections::HashSet;
+use std::{clone::Clone, collections::HashSet};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Field<T> {
     value: Option<T>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Date {
     pub year: Option<i32>,
     pub month: Option<u32>,
     pub day: Option<u32>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Command {
     pub funk: Field<String>,
     pub object: Field<String>,
@@ -27,10 +27,10 @@ pub struct Command {
     pub id: Field<u32>,
     pub bike_id: Field<u8>,
     pub val: Field<f32>,
+    pub val_lt: Field<f32>,
+    pub val_gt: Field<f32>,
     pub include_tags: HashSet<String>,
     pub exclude_tags: HashSet<String>,
-    //bcl add ride G:1 45.5 "Nice morning ride."
-    //bcl add buy G:3 +maintenances +capitally "change chain" 332.5
 }
 
 impl<T> Field<T> {
@@ -58,6 +58,13 @@ impl<T> Field<T> {
 
     pub fn set(&mut self, val: Option<T>) {
         self.value = val
+    }
+
+    pub fn get(&self) -> Option<T>
+        where
+            T: Clone,
+    {
+        self.value.clone()
     }
 
     pub fn set_or_err(&mut self, val: Option<T>, msg: &str) {
@@ -149,10 +156,12 @@ impl Date {
         }
 
         let parsed_year: i32;
+        let current_year = chrono::Local::now().year();
 
         if val == "prev" {
-            let current_year = chrono::Local::now().year();
             parsed_year = current_year - 1;
+        } else if val == "now" {
+            parsed_year = current_year;
         } else if let Ok(number) = val.parse::<i32>() {
             parsed_year = number;
         } else {
@@ -170,14 +179,16 @@ impl Date {
         }
 
         let parsed_month: u32;
+        let current_month = Local::now().month();
 
         if val == "prev" {
-            let current_month = Local::now().month();
             if current_month > 1 {
                 parsed_month = current_month - 1;
             } else {
                 parsed_month = 12;
             }
+        } else if val == "now" {
+            parsed_month = current_month;
         } else if let Ok(number) = val.parse::<u32>() {
             parsed_month = number;
         } else {
@@ -195,11 +206,10 @@ impl Date {
         }
 
         let parsed_day: u32;
+        let today = Local::now().naive_local().date();
+        let current_day = today.day();
 
         if val == "prev" {
-            let today = Local::now().naive_local().date();
-            let current_day = today.day();
-
             if current_day > 1 {
                 parsed_day = current_day - 1;
             } else {
@@ -229,6 +239,8 @@ impl Date {
 
                 parsed_day = days_in_prev_month;
             }
+        } else if val == "now" {
+            parsed_day = current_day;
         } else if let Ok(number) = val.parse::<u32>() {
             parsed_day = number;
         } else {
@@ -241,11 +253,7 @@ impl Date {
     }
 
     pub fn to_naive(&self) -> NaiveDate {
-        NaiveDate::from_ymd_opt(
-            self.year_or_now(),
-            self.month_or_now(),
-            self.day_or_now(),
-        ).unwrap()
+        NaiveDate::from_ymd_opt(self.year_or_now(), self.month_or_now(), self.day_or_now()).unwrap()
     }
 
     fn is_leap_year(year: i32) -> bool {
@@ -266,6 +274,8 @@ impl Command {
             id: Field::new(),
             bike_id: Field::new(),
             val: Field::new(),
+            val_lt: Field::new(),
+            val_gt: Field::new(),
             include_tags: HashSet::new(),
             exclude_tags: HashSet::new(),
         }
@@ -329,6 +339,25 @@ impl Command {
                 s if s.starts_with('-') => {
                     command.exclude_tags.insert(arg[1..].to_string());
                 }
+                s if s.ends_with("+") => {
+                    if let Ok(number) = s.trim_end_matches('+').parse::<f32>() {
+                        command
+                            .val_gt
+                            .set_or_err(Some(number), "multiple max value input");
+                    } else {
+                        err_exit!(format!("Wrong format. Expected [float]+, but given {}", s));
+                    }
+                }
+                s if s.ends_with("-") => {
+                    if let Ok(number) = s.trim_end_matches('-').parse::<f32>() {
+                        command
+                            .val_lt
+                            .set_or_err(Some(number), "multiple min value input");
+                    } else {
+                        err_exit!(format!("Wrong format. Expected [float]-, but given {}", s));
+                    }
+                }
+
                 _ => {
                     if let Ok(number) = arg.parse::<f32>() {
                         command
