@@ -71,7 +71,7 @@ fn create_ride_table(conn: &Connection) -> Result<()> {
             bike_id     INTEGER NOT NULL,
             datestamp   NUMERIC NOT NULL,
             distance    REAL NOT NULL,
-            annotate    TEXT,
+            annotation  TEXT,
             FOREIGN KEY(bike_id) REFERENCES bike(id) ON DELETE RESTRICT
         )",
         [],
@@ -85,7 +85,7 @@ fn create_chain_lubrication_table(conn: &Connection) -> Result<()> {
             id          INTEGER PRIMARY KEY,
             bike_id     INTEGER NOT NULL,
             datestamp   NUMERIC NOT NULL,
-            annotate    TEXT,
+            annotation  TEXT,
             FOREIGN KEY(bike_id) REFERENCES bike(id) ON DELETE RESTRICT
         )",
         [],
@@ -98,9 +98,9 @@ fn create_tag_to_ride_table(conn: &Connection) -> Result<()> {
         "CREATE TABLE IF NOT EXISTS tag_to_ride(
             id          INTEGER PRIMARY KEY,
             tag_id      INTEGER NOT NULL,
-            bike_id     INTEGER NOT NULL,
+            ride_id     INTEGER NOT NULL,
             FOREIGN KEY(tag_id) REFERENCES tag(id) ON DELETE CASCADE,
-            FOREIGN KEY(bike_id) REFERENCES bike(id) ON DELETE CASCADE
+            FOREIGN KEY(ride_id) REFERENCES ride(id) ON DELETE CASCADE
         )",
         [],
     )?;

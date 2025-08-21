@@ -61,7 +61,19 @@ pub struct Ride {
     pub bike_id: i32,
     pub datestamp: NaiveDate,
     pub distance: f32,
-    pub annotate: Opt<String>,
+    pub annotation: Opt<String>,
+}
+
+#[derive(Debug, Clone, Tabled)]
+pub struct RideList {
+    pub id: i32,
+    pub ride_id: i32,
+    pub category: String,
+    pub bike: String,
+    pub tags: String,
+    pub date: NaiveDate,
+    pub distance: f32,
+    pub annotation: String,
 }
 
 #[derive(Debug, Clone, Tabled)]
@@ -69,7 +81,7 @@ pub struct ChainLubrication {
     pub id: i32,
     pub bike_id: i32,
     pub datestamp: NaiveDate,
-    pub annotate: Opt<String>,
+    pub annotation: Opt<String>,
 }
 
 #[derive(Debug, Clone, Tabled)]
@@ -142,7 +154,7 @@ impl Buy {
 impl BuyList {
     pub fn from_row(row: &Row) -> Result<Self> {
         Ok(Self {
-            id: row.get(6)?,
+            id: 0,
             buy_id: row.get(0)?,
             vehicle: row.get(5)?,
             tags: row.get(4)?,
@@ -183,7 +195,22 @@ impl Ride {
             bike_id: row.get("bike_id")?,
             datestamp: row.get("datestamp")?,
             distance: row.get("distance")?,
-            annotate: Opt(row.get::<_, Option<String>>("annotate")?),
+            annotation: Opt(row.get::<_, Option<String>>("annotation")?),
+        })
+    }
+}
+
+impl RideList {
+    pub fn from_row(row: &Row) -> Result<Self> {
+        Ok(Self {
+            id: 0,
+            ride_id: row.get(0)?,
+            category: row.get(1)?,
+            bike: row.get(2)?,
+            tags: row.get(6)?,
+            date: row.get(3)?,
+            distance: row.get(4)?,
+            annotation: row.get(5)?,
         })
     }
 }
@@ -194,7 +221,7 @@ impl ChainLubrication {
             id: row.get("id")?,
             bike_id: row.get("bike_id")?,
             datestamp: row.get("datestamp")?,
-            annotate: Opt(row.get::<_, Option<String>>("annotate")?),
+            annotation: Opt(row.get::<_, Option<String>>("annotation")?),
         })
     }
 }

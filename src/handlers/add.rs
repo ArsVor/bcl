@@ -159,81 +159,6 @@ fn buy(conn: &mut Connection, command: Command) -> Result<()> {
     Ok(())
 }
 
-// fn buy(conn: &mut Connection, command: Command) -> Result<()> {
-//     if command.val.is_none() || command.annotation.is_empty() {
-//         err_exit!("Command params missed.\nExpected: `bcl add buy [\"Product name\"] [price]`");
-//     }
-//
-//     let name: String = command.annotation.join(" ");
-//     let price: f32 = command.val.unwrap();
-//     let date: NaiveDate = command.date.to_naive();
-//
-//     let mut tags_id: Vec<i32> = Vec::new();
-//     let mut fk_id: HashMap<&str, i32> = HashMap::new();
-//
-//     if !command.include_tags.is_empty() {
-//         for tag in command.include_tags {
-//             tags_id.push(tag_get_or_create(conn, tag.as_str()).unwrap());
-//         }
-//     }
-//
-//     if command.category.is_some() {
-//         let cat: Category = get_category(conn, command.category.unwrap().as_str()).unwrap();
-//         fk_id.insert("cat_id", cat.id);
-//
-//         if command.bike_id.is_some() {
-//             let bike: Bike = get_bike(
-//                 conn,
-//                 command.category.unwrap().as_str(),
-//                 command.bike_id.unwrap(),
-//             )
-//             .unwrap();
-//             fk_id.insert("bike_id", bike.id);
-//         }
-//     }
-//
-//     let tx = conn.transaction()?;
-//
-//     tx.execute(
-//         "INSERT INTO buy (name, price, datestamp) VALUES (?1, ?2, ?3)",
-//         params![name, price, date],
-//     )?;
-//
-//     let buy_id = tx.last_insert_rowid();
-//
-//     if fk_id.contains_key(&"cat_id") {
-//         let category_id = fk_id.get("cat_id");
-//         tx.execute(
-//             "INSERT INTO buy_to_category (buy_id, category_id) VALUES (?1, ?2)",
-//             params![buy_id, category_id],
-//         )?;
-//     }
-//
-//     if fk_id.contains_key(&"bike_id") {
-//         let bike_id = fk_id.get("bike_id");
-//         tx.execute(
-//             "INSERT INTO buy_to_bike (buy_id, bike_id) VALUES (?1, ?2)",
-//             params![buy_id, bike_id],
-//         )?;
-//     }
-//
-//     for tag_id in tags_id {
-//         tx.execute(
-//             "INSERT INTO tag_to_buy (tag_id, buy_id) VALUES (?1, ?2)",
-//             params![tag_id, buy_id],
-//         )?;
-//     }
-//
-//     tx.commit()?;
-//
-//     println!(
-//         "Purchase: \"{0}\" from {1} - added.",
-//         &name,
-//         &date.format("%d.%m.%y").to_string()
-//     );
-//     Ok(())
-// }
-
 fn ride(conn: &mut Connection, command: Command) -> Result<()> {
     if command.category.is_none() || command.bike_id.is_none() || command.val.is_none() {
         err_exit!(
@@ -254,15 +179,15 @@ fn ride(conn: &mut Connection, command: Command) -> Result<()> {
     } else {
         Some(command.annotation.join(" "))
     };
-    let mut tags_id: Vec<i32> = Vec::new();
-
-    if !command.include_tags.is_empty() {
-        for tag in command.include_tags {
-            tags_id.push(tag_get_or_create(conn, tag.as_str()).unwrap());
-        }
-    }
 
     let tx = conn.transaction()?;
+
+    let mut tags_id: Vec<i32> = Vec::new();
+    if !command.include_tags.is_empty() {
+        for tag in &command.include_tags {
+            tags_id.push(tag_get_or_create_tx(&tx, tag.as_str())?);
+        }
+    }
 
     tx.execute(
         "INSERT INTO ride (bike_id, datestamp, distance, annotation) VALUES (?1, ?2, ?3, ?4)",

@@ -2,27 +2,28 @@ use std::collections::HashSet;
 
 use rusqlite::{Connection, Result, Transaction, params};
 
-use crate::cli::structs::Command;
+use crate::{cli::structs::Command, err_exit};
 
 use super::models::{Bike, Category};
 
 pub fn get_included_excluded(
     conn: &Connection,
     command: Command,
+    table: &str,
 ) -> Result<(HashSet<i32>, HashSet<i32>)> {
     let mut include_id: HashSet<i32> = HashSet::new();
     let mut exclude_id: HashSet<i32> = HashSet::new();
 
     if !command.exclude_tags.is_empty() {
         for tag in command.exclude_tags {
-            let id_set: HashSet<i32> = get_buy_id_with_tag(conn, tag.as_str())?;
+            let id_set: HashSet<i32> = get_id_with_tag(conn, table, tag.as_str())?;
             exclude_id.extend(id_set);
         }
     }
 
     if !command.include_tags.is_empty() {
         for tag in command.include_tags {
-            let id_set: HashSet<i32> = get_buy_id_with_tag(conn, tag.as_str())?;
+            let id_set: HashSet<i32> = get_id_with_tag(conn, table, tag.as_str())?;
             include_id.extend(id_set);
         }
     }
@@ -98,15 +99,29 @@ pub fn tag_get_or_create_tx(tx: &Transaction, tag_name: &str) -> Result<i32> {
 //     }
 // }
 
-pub fn get_buy_id_with_tag(conn: &Connection, name: &str) -> Result<HashSet<i32>> {
+pub fn get_id_with_tag(conn: &Connection, table: &str, name: &str) -> Result<HashSet<i32>> {
     let mut result: HashSet<i32> = HashSet::new();
-    let mut stmt = conn.prepare(
-        "SELECT b.id
-         FROM buy b
-         JOIN tag_to_buy tb ON b.id = tb.buy_id
-         JOIN tag t ON tb.tag_id = t.id
-         WHERE t.name = ?1",
-    )?;
+    let select_sql: &str = match table {
+        "buy" => {
+            "SELECT b.id
+             FROM buy b
+             JOIN tag_to_buy tb ON b.id = tb.buy_id
+             JOIN tag t ON tb.tag_id = t.id
+             WHERE t.name = ?1"
+        }
+        "ride" => {
+            "SELECT r.id
+             FROM ride r
+             JOIN tag_to_ride tr ON r.id = tr.ride_id
+             JOIN tag t ON tr.tag_id = t.id
+             WHERE t.name = ?1"
+        }
+        _ => {
+            err_exit!("OOps!");
+        }
+    };
+
+    let mut stmt = conn.prepare(select_sql)?;
     let buy_ids = stmt.query_map([name], |row| row.get::<_, i32>(0))?;
 
     for id in buy_ids {
