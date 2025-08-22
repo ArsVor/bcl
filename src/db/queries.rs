@@ -23,9 +23,17 @@ pub fn get_included_excluded(
     }
 
     if !command.include_tags.is_empty() {
-        for tag in command.include_tags {
+        for (i, tag) in command.include_tags.iter().enumerate() {
             let id_set: HashSet<i32> = get_buy_id_with_tag(conn, table, tag.as_str())?;
-            include_id.extend(id_set);
+
+            if i == 0 {
+                include_id = id_set;
+            } else {
+                include_id = include_id
+                    .intersection(&id_set)
+                    .copied()
+                    .collect();
+            }
         }
     }
 
