@@ -85,6 +85,24 @@ pub fn named_parse(mut command: Command, arg: String) -> Command {
                     ));
                 }
             }
+            "lim" => {
+                if let Ok(number) = val.parse::<u8>() {
+                    command.lim = number;
+                } else {
+                    err_exit!(format!(
+                        "Wrong value of '{key}'. Expected int from 0 to 255, but given '{val}'"
+                    ));
+                }
+            }
+            _ => {
+                err_exit!(format!("Unexpected key - '{key}'."));
+            }
+        }
+    } else {
+        match key {
+            "lim" => {
+                command.lim = 0;
+            }
             _ => {
                 err_exit!(format!("Unexpected key - '{key}'."));
             }

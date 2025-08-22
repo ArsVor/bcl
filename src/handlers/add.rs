@@ -1,11 +1,14 @@
 use std::collections::HashMap;
 
 use chrono::NaiveDate;
+use owo_colors::OwoColorize;
 use rusqlite::{Connection, Result, params};
 
 use crate::cli::structs::Command;
 use crate::db::models::{Bike, Category};
-use crate::db::queries::{get_bike, get_category, tag_get_or_create, tag_get_or_create_tx};
+use crate::db::queries::{
+    get_bike, get_category, get_lub_info, tag_get_or_create, tag_get_or_create_tx,
+};
 use crate::err_exit;
 
 pub fn route(mut conn: Connection, command: Command) -> Result<()> {
@@ -33,7 +36,10 @@ fn category(conn: &Connection, command: Command) -> Result<()> {
         params![abbr, name],
     )?;
 
-    println!("Bicycle category: \"{0}\" ({1}) - added.", &abbr, &name);
+    println!(
+        "{}",
+        format!("Bicycle category: \"{0}\" ({1}) - added.", &abbr, &name).blue()
+    );
     Ok(())
 }
 
@@ -46,12 +52,26 @@ fn bike(conn: &Connection, command: Command) -> Result<()> {
     let cat: Category = get_category(conn, command.category.unwrap().as_str()).unwrap();
     let name: String = command.annotation.join(" ");
 
+    let mut id_in_cat: i32 = conn.query_row(
+        "SELECT id_in_cat
+        FROM bike
+        WHERE category_id = ?1
+        ORDER BY id DESC
+        LIMIT 1",
+        params![cat.id],
+        |row| row.get(0),
+    )?;
+    id_in_cat += 1;
+
     conn.execute(
-        "INSERT INTO bike (category_id, name, datestamp) VALUES (?1, ?2, ?3)",
-        params![cat.id, name, date],
+        "INSERT INTO bike (category_id, id_in_cat, name, datestamp) VALUES (?1, ?2, ?3, ?4)",
+        params![cat.id, id_in_cat, name, date],
     )?;
 
-    println!("{0} \"{1}\" - added", &cat.name, &name);
+    println!(
+        "{}",
+        format!("{0} \"{1}\" - added", &cat.name, &name).blue()
+    );
 
     Ok(())
 }
@@ -75,13 +95,17 @@ fn chain_lub(conn: &Connection, command: Command) -> Result<()> {
     };
 
     conn.execute(
-        "INSERT INTO bike (bike_id, datestamp, annotation) VALUES (?1, ?2, ?3)",
+        "INSERT INTO chain_lubrication (bike_id, datestamp, annotation) VALUES (?1, ?2, ?3)",
         params![bike.id, date, annotation],
     )?;
 
     println!(
-        "Chain lubrication from {} - added.",
-        &date.format("%d.%m.%y").to_string()
+        "{}",
+        format!(
+            "Chain lubrication from {} - added.",
+            &date.format("%d.%m.%y").to_string()
+        )
+        .blue()
     );
 
     Ok(())
@@ -151,9 +175,13 @@ fn buy(conn: &mut Connection, command: Command) -> Result<()> {
     tx.commit()?;
 
     println!(
-        "Purchase: \"{0}\" from {1} - added.",
-        &name,
-        &date.format("%d.%m.%y")
+        "{}",
+        format!(
+            "Purchase: \"{0}\" from {1} - added.",
+            &name,
+            &date.format("%d.%m.%y")
+        )
+        .blue()
     );
 
     Ok(())
@@ -178,6 +206,12 @@ fn ride(conn: &mut Connection, command: Command) -> Result<()> {
         None
     } else {
         Some(command.annotation.join(" "))
+    };
+
+    let after_lub_distance: f32 = if let Ok(prev_distance) = get_lub_info(conn, bike.id as u8) {
+        prev_distance + distance
+    } else {
+        err_exit!("Can't calculate distance after last lubrication.");
     };
 
     let tx = conn.transaction()?;
@@ -205,13 +239,30 @@ fn ride(conn: &mut Connection, command: Command) -> Result<()> {
 
     tx.commit()?;
 
-    println!(
-        "Ride {0}:{1} to {2}km from {3} - added",
-        &command.category.unwrap(),
-        &command.bike_id.unwrap(),
-        &distance,
-        &date.format("%d.%m.%y").to_string()
+    let msg = format!(
+        "After last chain lubrication you ride: {}km",
+        &after_lub_distance
     );
+
+    println!(
+        "{}",
+        format!(
+            "Ride {0}:{1} to {2}km from {3} - added",
+            &command.category.unwrap(),
+            &command.bike_id.unwrap(),
+            &distance,
+            &date.format("%d.%m.%y").to_string()
+        )
+        .blue()
+    );
+
+    if after_lub_distance > 200.00 {
+        println!("{}", msg.red());
+    } else if after_lub_distance > 150.00 {
+        println!("{}", msg.yellow());
+    } else {
+        println!("{}", msg.green());
+    };
 
     Ok(())
 }

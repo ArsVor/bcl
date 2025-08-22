@@ -55,6 +55,7 @@ fn create_bike_table(conn: &Connection) -> Result<()> {
         "CREATE TABLE IF NOT EXISTS bike(
             id              INTEGER PRIMARY KEY,
             category_id     INTEGER NOT NULL,
+            id_in_cat       INTEGER NOT NULL,
             name            TEXT UNIQUE NOT NULL,
             datestamp       NUMERIC NOT NULL,
             FOREIGN KEY(category_id) REFERENCES category(id) ON DELETE RESTRICT 

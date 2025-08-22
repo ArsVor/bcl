@@ -31,7 +31,7 @@ pub struct Buy {
 pub struct BuyList {
     pub id: i32,
     pub buy_id: i32,
-    pub vehicle: String,
+    pub target: String,
     pub tags: String,
     pub name: String,
     pub price: f32,
@@ -68,11 +68,10 @@ pub struct Ride {
 pub struct RideList {
     pub id: i32,
     pub ride_id: i32,
-    pub category: String,
     pub bike: String,
-    pub tags: String,
     pub date: NaiveDate,
     pub distance: f32,
+    pub tags: String,
     pub annotation: String,
 }
 
@@ -80,6 +79,15 @@ pub struct RideList {
 pub struct ChainLubrication {
     pub id: i32,
     pub bike_id: i32,
+    pub datestamp: NaiveDate,
+    pub annotation: Opt<String>,
+}
+
+#[derive(Debug, Clone, Tabled)]
+pub struct ChainLubricationList {
+    pub id: i32,
+    pub lub_id: i32,
+    pub bike: String,
     pub datestamp: NaiveDate,
     pub annotation: Opt<String>,
 }
@@ -156,7 +164,7 @@ impl BuyList {
         Ok(Self {
             id: 0,
             buy_id: row.get(0)?,
-            vehicle: row.get(5)?,
+            target: row.get(5)?,
             tags: row.get(4)?,
             name: row.get(1)?,
             price: row.get(2)?,
@@ -205,12 +213,11 @@ impl RideList {
         Ok(Self {
             id: 0,
             ride_id: row.get(0)?,
-            category: row.get(1)?,
-            bike: row.get(2)?,
-            tags: row.get(6)?,
-            date: row.get(3)?,
-            distance: row.get(4)?,
-            annotation: row.get(5)?,
+            bike: row.get(3)?,
+            date: row.get(1)?,
+            distance: row.get(2)?,
+            tags: row.get(5)?,
+            annotation: row.get(4)?,
         })
     }
 }
@@ -222,6 +229,18 @@ impl ChainLubrication {
             bike_id: row.get("bike_id")?,
             datestamp: row.get("datestamp")?,
             annotation: Opt(row.get::<_, Option<String>>("annotation")?),
+        })
+    }
+}
+
+impl ChainLubricationList {
+    pub fn from_row(row: &Row) -> Result<Self> {
+        Ok(Self {
+            id: row.get(0)?,
+            lub_id: row.get(1)?,
+            bike: row.get(4)?,
+            datestamp: row.get(2)?,
+            annotation: Opt(row.get::<_, Option<String>>(3)?),
         })
     }
 }

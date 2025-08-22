@@ -29,6 +29,7 @@ pub struct Command {
     pub val: Field<f32>,
     pub val_lt: Field<f32>,
     pub val_gt: Field<f32>,
+    pub lim: u8,
     pub include_tags: HashSet<String>,
     pub exclude_tags: HashSet<String>,
 }
@@ -61,8 +62,8 @@ impl<T> Field<T> {
     }
 
     pub fn get(&self) -> Option<T>
-        where
-            T: Clone,
+    where
+        T: Clone,
     {
         self.value.clone()
     }
@@ -139,7 +140,6 @@ impl Date {
         };
 
         if !year.is_empty() {
-            println!("{year}");
             self.year_from_str(year);
         }
         if !month.is_empty() {
@@ -276,6 +276,7 @@ impl Command {
             val: Field::new(),
             val_lt: Field::new(),
             val_gt: Field::new(),
+            lim: 10,
             include_tags: HashSet::new(),
             exclude_tags: HashSet::new(),
         }

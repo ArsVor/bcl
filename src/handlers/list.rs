@@ -7,7 +7,7 @@ use tabled::Table;
 use tabled::settings::{Style, style};
 
 use crate::cli::structs::{Command, Field};
-use crate::db::models::{Bike, BikeList, Buy, BuyList, Category, RideList};
+use crate::db::models::{Bike, BikeList, Buy, BuyList, Category, ChainLubricationList, RideList};
 use crate::db::queries::{get_bike, get_category, get_included_excluded};
 use crate::err_exit;
 
@@ -19,6 +19,7 @@ pub fn route(mut conn: Connection, command: Command) -> Result<()> {
         "bike" => bike(&conn, command),
         "buy" => buy(&conn, command),
         "cat" => categories(&conn),
+        "lub" => chain_lub(&conn, command),
         "ride" => ride(&conn, command),
         "tag" => tag(&conn),
         _ => Ok(()),
@@ -27,7 +28,7 @@ pub fn route(mut conn: Connection, command: Command) -> Result<()> {
 
 fn categories(conn: &Connection) -> Result<()> {
     let mut stmt = conn.prepare("SELECT * FROM category")?;
-    let category_iter = stmt.query_map([], |row| Category::from_row(row))?;
+    let category_iter = stmt.query_map([], Category::from_row)?;
 
     let mut categories: Vec<Category> = Vec::new();
 
@@ -35,9 +36,13 @@ fn categories(conn: &Connection) -> Result<()> {
         categories.push(category?);
     }
 
-    let mut table = Table::new(categories);
-    table.with(Style::rounded());
-    println!("{}", &table);
+    if !categories.is_empty() {
+        let mut table = Table::new(categories);
+        table.with(Style::rounded());
+        println!("{}", &table);
+    } else {
+        println!("{}", "Nothing found for your query.".yellow());
+    }
 
     Ok(())
 }
@@ -70,7 +75,7 @@ fn bike(conn: &Connection, command: Command) -> Result<()> {
             WHERE category_id = ?1
         ",
         )?;
-        stmt.query_map([cat.id], |row| BikeList::from_row(row))?
+        stmt.query_map([cat.id], BikeList::from_row)?
             .collect::<Result<Vec<_>, _>>()?
     } else {
         let mut stmt = conn.prepare(
@@ -85,13 +90,17 @@ fn bike(conn: &Connection, command: Command) -> Result<()> {
                 JOIN category c ON c.id = b.category_id
         ",
         )?;
-        stmt.query_map([], |row| BikeList::from_row(row))?
+        stmt.query_map([], BikeList::from_row)?
             .collect::<Result<Vec<_>, _>>()?
     };
 
-    let mut table = Table::new(bikes);
-    table.with(Style::rounded());
-    println!("{}", &table);
+    if !bikes.is_empty() {
+        let mut table = Table::new(bikes);
+        table.with(Style::rounded());
+        println!("{}", &table);
+    } else {
+        println!("{}", "Nothing found for your query.".yellow());
+    }
 
     Ok(())
 }
@@ -104,7 +113,15 @@ fn buy(conn: &Connection, command: Command) -> Result<()> {
             b.price,
             b.datestamp,
             COALESCE(GROUP_CONCAT(t.name, ', '), '') AS tags,
-            COALESCE(bk.name, c.name, '') AS bike_or_category
+        CASE 
+            WHEN c.abbr IS NULL AND bk.id_in_cat IS NULL 
+                THEN '' 
+            ELSE concat(
+                c.abbr, 
+                ':', 
+                COALESCE(bk.id_in_cat, '')
+            ) 
+        END AS bike_or_category
         FROM buy b
         LEFT JOIN tag_to_buy tb ON tb.buy_id = b.id
         LEFT JOIN tag t ON t.id = tb.tag_id
@@ -112,8 +129,8 @@ fn buy(conn: &Connection, command: Command) -> Result<()> {
         LEFT JOIN category c ON c.id = bc.category_id
         LEFT JOIN buy_to_bike bbk ON bbk.buy_id = b.id
         LEFT JOIN bike bk ON bk.id = bbk.bike_id
-    "
-    .to_string();
+    ".to_string();
+
     let mut where_sql: Vec<String> = vec![];
     let mut dyn_params: Vec<Box<dyn ToSql>> = Vec::new();
     let eq: bool = command.date.day.is_some();
@@ -148,7 +165,6 @@ fn buy(conn: &Connection, command: Command) -> Result<()> {
             true => where_sql.push(format!("b.datestamp = ?{}", where_sql.len() + 1)),
             false => where_sql.push(format!("b.datestamp >= ?{}", where_sql.len() + 1)),
         }
-        println!("date is some");
         dyn_params.push(Box::new(date));
     } else {
         if let Some(date_gt) = date_gt {
@@ -161,13 +177,14 @@ fn buy(conn: &Connection, command: Command) -> Result<()> {
         }
     }
 
-    if let Some(bike_id) = bike_id {
-        let bike: Bike = get_bike(conn, category.unwrap().as_str(), bike_id)?;
-        where_sql.push(format!("bk.id = ?{}", where_sql.len() + 1));
-        dyn_params.push(Box::new(bike.id));
-    } else if let Some(category) = category {
+    if let Some(category) = category {
         where_sql.push(format!("c.abbr = ?{}", where_sql.len() + 1));
         dyn_params.push(Box::new(category));
+    }
+
+    if let Some(bike_id) = bike_id {
+        where_sql.push(format!("bk.id_in_cat = ?{}", where_sql.len() + 1));
+        dyn_params.push(Box::new(bike_id));
     }
 
     if !command.annotation.is_empty() {
@@ -181,12 +198,15 @@ fn buy(conn: &Connection, command: Command) -> Result<()> {
         select_sql.push_str(&where_sql.join(" AND "));
     }
 
-    select_sql.push_str("GROUP BY b.id, b.name, b.price, b.datestamp ORDER BY b.id");
+    select_sql.push_str("GROUP BY b.id, b.name, b.price, b.datestamp ORDER BY b.datestamp DESC");
+    if command.lim > 0 {
+        select_sql.push_str(&format!(" LIMIT {}", &command.lim));
+    }
 
     let mut stmt = conn.prepare(&select_sql)?;
     let buys_iter = stmt.query_map(
         params_from_iter(dyn_params.iter().map(|b| b.as_ref())),
-        |row| BuyList::from_row(row),
+        BuyList::from_row,
     )?;
 
     let (include_id, exclude_id): (HashSet<i32>, HashSet<i32>) =
@@ -220,10 +240,9 @@ fn ride(conn: &Connection, command: Command) -> Result<()> {
     let mut select_sql: String = "
         SELECT
             r.id,
-            c.abbr,
-            b.name,
             r.datestamp,
             r.distance,
+            concat(c.abbr, ':', b.id_in_cat) as cat_bike,
             COALESCE(r.annotation, '') AS ann,
             COALESCE(GROUP_CONCAT(t.name, ', '), '') AS tags
         FROM ride r
@@ -231,8 +250,7 @@ fn ride(conn: &Connection, command: Command) -> Result<()> {
         LEFT JOIN tag t ON tr.tag_id = t.id
         LEFT JOIN bike b ON r.bike_id = b.id
         LEFT JOIN category c ON b.category_id = c.id
-    "
-    .to_string();
+    ".to_string();
 
     let mut where_sql: Vec<String> = vec![];
     let mut dyn_params: Vec<Box<dyn ToSql>> = Vec::new();
@@ -280,13 +298,14 @@ fn ride(conn: &Connection, command: Command) -> Result<()> {
         }
     }
 
-    if let Some(bike_id) = bike_id {
-        let bike: Bike = get_bike(conn, category.unwrap().as_str(), bike_id)?;
-        where_sql.push(format!("b.id = ?{}", where_sql.len() + 1));
-        dyn_params.push(Box::new(bike.id));
-    } else if let Some(category) = category {
+    if let Some(category) = category {
         where_sql.push(format!("c.abbr = ?{}", where_sql.len() + 1));
         dyn_params.push(Box::new(category));
+    }
+
+    if let Some(bike_id) = bike_id {
+        where_sql.push(format!("b.id_in_cat = ?{}", where_sql.len() + 1));
+        dyn_params.push(Box::new(bike_id));
     }
 
     if !command.annotation.is_empty() {
@@ -299,13 +318,16 @@ fn ride(conn: &Connection, command: Command) -> Result<()> {
         select_sql.push_str(" WHERE ");
         select_sql.push_str(&where_sql.join(" AND "));
     }
-    select_sql.push_str("GROUP BY r.id ORDER BY r.id");
+    select_sql.push_str("GROUP BY r.id ORDER BY r.datestamp DESC");
+    if command.lim > 0 {
+        select_sql.push_str(&format!(" LIMIT {}", &command.lim));
+    }
 
     let (include_id, exclude_id): (HashSet<i32>, HashSet<i32>) =
     get_included_excluded(conn, command, "ride")?;
 
     let mut stmt = conn.prepare(&select_sql)?;
-    let rides_iter = stmt.query_map(params_from_iter(dyn_params.iter().map(|b| b.as_ref())), |row| RideList::from_row(row))?;
+    let rides_iter = stmt.query_map(params_from_iter(dyn_params.iter().map(|b| b.as_ref())), RideList::from_row)?;
 
     let mut rides: Vec<RideList> = Vec::new();
     let mut num: i32 = 1;
@@ -326,5 +348,91 @@ fn ride(conn: &Connection, command: Command) -> Result<()> {
         println!("{}", "Nothing found for your query.".yellow());
     }
 
+    Ok(())
+}
+
+fn chain_lub(conn: &Connection, command: Command) -> Result<()> {
+    let mut select_sql: String = "
+        SELECT
+            ROW_NUMBER() OVER (ORDER BY l.datestamp DESC) AS row_num,
+            l.id,
+            l.datestamp,
+            COALESCE(l.annotation, '') AS ann,
+            concat(c.abbr, ':', b.id_in_cat)
+        FROM chain_lubrication l
+        JOIN bike b ON b.id = l.bike_id
+        JOIN category c ON c.id = b.category_id
+    ".to_string();
+
+    let mut where_sql: Vec<String> = vec![];
+    let mut dyn_params: Vec<Box<dyn ToSql>> = Vec::new();
+    let eq: bool = command.date.day.is_some();
+
+    let date: Option<NaiveDate> = get_date(command.date.clone());
+    let date_lt: Option<NaiveDate> = get_date(command.lt.clone());
+    let date_gt: Option<NaiveDate> = get_date(command.gt.clone());
+
+    let bike_id: Option<u8> = command.bike_id.get();
+    let category: Option<String> = command.category.get();
+
+    if let Some(date) = date {
+        match eq {
+            true => where_sql.push(format!("l.datestamp = ?{}", where_sql.len() + 1)),
+            false => where_sql.push(format!("l.datestamp >= ?{}", where_sql.len() + 1)),
+        }
+        dyn_params.push(Box::new(date));
+    } else {
+        if let Some(date_gt) = date_gt {
+            where_sql.push(format!("l.datestamp > ?{}", where_sql.len() + 1));
+            dyn_params.push(Box::new(date_gt));
+        }
+        if let Some(date_lt) = date_lt {
+            where_sql.push(format!("l.datestamp < ?{}", where_sql.len() + 1));
+            dyn_params.push(Box::new(date_lt));
+        }
+    }
+
+    if let Some(category) = category {
+        where_sql.push(format!("c.abbr = ?{}", where_sql.len() + 1));
+        dyn_params.push(Box::new(category));
+    }
+
+    if let Some(bike_id) = bike_id {
+        where_sql.push(format!("b.id_in_cat = ?{}", where_sql.len() + 1));
+        dyn_params.push(Box::new(bike_id));
+    }
+
+    if !command.annotation.is_empty() {
+        let name: String = command.annotation.join(" ");
+        where_sql.push(format!("l.annotation LIKE ?{}", where_sql.len() + 1));
+        dyn_params.push(Box::new(format!("%{}%", &name)));
+    }
+
+    if !where_sql.is_empty() {
+        select_sql.push_str(" WHERE ");
+        select_sql.push_str(&where_sql.join(" AND "));
+    }
+    select_sql.push_str("GROUP BY l.id ORDER BY l.datestamp DESC");
+    if command.lim > 0 {
+        select_sql.push_str(&format!(" LIMIT {}", &command.lim));
+    }
+
+    let mut stmt = conn.prepare(&select_sql)?;
+    let lubs_iter = stmt.query_map(
+        params_from_iter(dyn_params.iter().map(|b| b.as_ref())),
+        ChainLubricationList::from_row,
+    )?;
+
+    let mut lubs: Vec<ChainLubricationList> = Vec::new();
+    for lub in lubs_iter {
+        lubs.push(lub?);
+    }
+    if !lubs.is_empty() {
+        let mut table = Table::new(lubs);
+        table.with(Style::rounded());
+        println!("{}", &table);
+    } else {
+        println!("{}", "Nothing found for your query.".yellow());
+    }
     Ok(())
 }
