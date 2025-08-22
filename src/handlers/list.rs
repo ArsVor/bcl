@@ -1,19 +1,18 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use chrono::NaiveDate;
 use owo_colors::OwoColorize;
-use rusqlite::{Connection, MappedRows, Result, Row, ToSql, params_from_iter};
+use rusqlite::{Connection, Result, ToSql, params_from_iter};
 use tabled::Table;
-use tabled::settings::{Style, style};
+use tabled::settings::Style;
 
 use crate::cli::structs::{Command, Field};
-use crate::db::models::{Bike, BikeList, Buy, BuyList, Category, ChainLubricationList, RideList};
-use crate::db::queries::{get_bike, get_category, get_included_excluded};
-use crate::err_exit;
+use crate::db::models::{BikeList, BuyList, Category, ChainLubricationList, RideList};
+use crate::db::queries::{get_category, get_included_excluded};
 
 use super::helpers::get_date;
 
-pub fn route(mut conn: Connection, command: Command) -> Result<()> {
+pub fn route(conn: Connection, command: Command) -> Result<()> {
     let obj = command.object.unwrap();
     match obj.as_str() {
         "bike" => bike(&conn, command),

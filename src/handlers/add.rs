@@ -6,9 +6,7 @@ use rusqlite::{Connection, Result, params};
 
 use crate::cli::structs::Command;
 use crate::db::models::{Bike, Category};
-use crate::db::queries::{
-    get_bike, get_category, get_lub_info, tag_get_or_create, tag_get_or_create_tx,
-};
+use crate::db::queries::{get_bike, get_category, get_lub_info, tag_get_or_create_tx};
 use crate::err_exit;
 
 pub fn route(mut conn: Connection, command: Command) -> Result<()> {
