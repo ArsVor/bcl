@@ -94,6 +94,20 @@ pub fn named_parse(mut command: Command, arg: String) -> Command {
                     ));
                 }
             }
+            "id" => {
+                if command.id.is_some() {
+                    err_exit!("Input dynamic id or static id, not both.");
+                }
+                if let Ok(number) = val.parse::<u32>() {
+                    command
+                        .real_id
+                        .set_or_err(Some(number), "multiple static id input");
+                } else {
+                    err_exit!(format!(
+                        "Wrong value of '{key}'. Expected int, but given '{val}'"
+                    ));
+                }
+            }
             _ => {
                 err_exit!(format!("Unexpected key - '{key}'."));
             }

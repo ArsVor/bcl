@@ -25,6 +25,7 @@ pub struct Command {
     pub lt: Date,
     pub gt: Date,
     pub id: Field<u32>,
+    pub real_id: Field<u32>,
     pub bike_id: Field<u8>,
     pub val: Field<f32>,
     pub val_lt: Field<f32>,
@@ -92,6 +93,14 @@ impl Date {
             month: None,
             day: None,
         }
+    }
+
+    pub fn is_some(&self) -> bool {
+        self.year.is_some() || self.month.is_some() || self.day.is_some()
+    }
+
+    pub fn is_none(&self) -> bool {
+        self.year.is_none() && self.month.is_none() && self.day.is_none()
     }
 
     pub fn year_or_now(&self) -> i32 {
@@ -272,6 +281,7 @@ impl Command {
             lt: Date::new(),
             gt: Date::new(),
             id: Field::new(),
+            real_id: Field::new(),
             bike_id: Field::new(),
             val: Field::new(),
             val_lt: Field::new(),
@@ -306,7 +316,7 @@ impl Command {
                         .funk
                         .set_or_err(Some("list".to_string()), "multiple command input.");
                 }
-                "buy" | "lub" | "ride" => {
+                "buy" | "lub" | "ride" | "cat" | "tag" => {
                     command
                         .object
                         .set_or_err(Some(arg), "multiple object input.");

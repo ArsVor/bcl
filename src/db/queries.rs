@@ -89,6 +89,32 @@ pub fn tag_get_or_create_tx(tx: &Transaction, tag_name: &str) -> Result<i32> {
     Ok(tx.last_insert_rowid() as i32)
 }
 
+pub fn tag_del_if_unused(conn: &mut Connection, tag_id: i32, tag_name: &str) -> Result<Option<String>> {
+    println!("STARTED");
+    let exists: bool = conn.query_row(
+        "SELECT EXISTS(
+            SELECT 1 FROM tag_to_buy WHERE tag_id = ?1
+            UNION ALL
+            SELECT 1 FROM tag_to_ride WHERE tag_id = ?1
+        )",
+        params![tag_id],
+        |row| row.get(0),
+    )?;
+    if exists {
+        println!("Is_exist");
+        return Ok(None);
+    }
+
+    println!("Is_not_exist");
+
+    conn.execute(
+        "DELETE FROM tag WHERE name = ?1", 
+        params![tag_name]
+    )?;
+
+    Ok(Some(tag_name.to_string()))
+}
+
 pub fn get_buy_id_with_tag(conn: &Connection, table: &str, name: &str) -> Result<HashSet<i32>> {
     let mut result: HashSet<i32> = HashSet::new();
     let select_sql: &str = match table {

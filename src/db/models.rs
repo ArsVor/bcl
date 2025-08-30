@@ -1,5 +1,6 @@
 use chrono::NaiveDate;
-use rusqlite::{Connection, Result, Row};
+use owo_colors::OwoColorize;
+use rusqlite::{Result, Row};
 use std::fmt;
 use tabled::Tabled;
 
@@ -25,6 +26,7 @@ pub struct Buy {
     pub name: String,
     pub price: f32,
     pub datestamp: NaiveDate,
+    pub tags: String,
 }
 
 #[derive(Debug, Clone, Tabled)]
@@ -42,6 +44,7 @@ pub struct BuyList {
 pub struct Bike {
     pub id: i32,
     pub category_id: i32,
+    pub id_in_cat: i32,
     pub name: String,
     pub datestamp: NaiveDate,
 }
@@ -61,7 +64,10 @@ pub struct Ride {
     pub bike_id: i32,
     pub datestamp: NaiveDate,
     pub distance: f32,
-    pub annotation: Opt<String>,
+    pub abbr: String,
+    pub id_in_cat: u8,
+    pub tags: String,
+    pub annotation: String,
 }
 
 #[derive(Debug, Clone, Tabled)]
@@ -129,6 +135,15 @@ impl<T: fmt::Display> fmt::Display for Opt<T> {
     }
 }
 
+impl<T> Opt<T> {
+    pub fn unwrap(&self) -> T
+    where
+        T: Clone,
+    {
+        self.0.clone().unwrap()
+    }
+}
+
 impl Category {
     pub fn from_row(row: &Row) -> Result<Self> {
         Ok(Self {
@@ -151,10 +166,11 @@ impl Tag {
 impl Buy {
     pub fn from_row(row: &Row) -> Result<Self> {
         Ok(Self {
-            id: row.get("id")?,
-            name: row.get("name")?,
-            price: row.get("price")?,
-            datestamp: row.get("datestamp")?,
+            id: row.get(0)?,
+            name: row.get(1)?,
+            price: row.get(2)?,
+            datestamp: row.get(3)?,
+            tags: row.get(4)?,
         })
     }
 }
@@ -178,6 +194,7 @@ impl Bike {
         Ok(Self {
             id: row.get("id")?,
             category_id: row.get("category_id")?,
+            id_in_cat: row.get("id_in_cat")?,
             name: row.get("name")?,
             datestamp: row.get("datestamp")?,
         })
@@ -199,11 +216,14 @@ impl BikeList {
 impl Ride {
     pub fn from_row(row: &Row) -> Result<Self> {
         Ok(Self {
-            id: row.get("id")?,
-            bike_id: row.get("bike_id")?,
-            datestamp: row.get("datestamp")?,
-            distance: row.get("distance")?,
-            annotation: Opt(row.get::<_, Option<String>>("annotation")?),
+            id: row.get(0)?,
+            bike_id: row.get(1)?,
+            datestamp: row.get(2)?,
+            distance: row.get(3)?,
+            abbr: row.get(4)?,
+            id_in_cat: row.get(5)?,
+            tags: row.get(7)?,
+            annotation: row.get(6)?,
         })
     }
 }
