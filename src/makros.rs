@@ -11,7 +11,7 @@ macro_rules! err_exit {
 macro_rules! suc_exit {
     ($msg:expr) => {
         use owo_colors::OwoColorize;
-        println!("{}", format!("WARNING: {}", $msg).yellow());
+        println!("{}", format!("{}: {}", "WARNING".yellow(), $msg));
         std::process::exit(0)
     };
 }

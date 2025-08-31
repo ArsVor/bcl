@@ -20,6 +20,7 @@ fn main() {
         let funk = command.funk.unwrap();
         let _ = match funk.as_str() {
             "add" => handlers::add::route(conn, command),
+            "del" => handlers::delete::route(conn, command),
             "list" => handlers::list::route(conn, command),
             "mod" => {
                 if command.real_id.is_some() || command.object.unwrap() == "tag" {
