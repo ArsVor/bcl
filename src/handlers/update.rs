@@ -121,7 +121,7 @@ fn buy(conn: &mut Connection, command: Command, id: u32) -> Result<()> {
 
     let mut cat: Option<Category> = None;
     let mut bike: Option<Bike> = None;
-    let mut tags_to_check: Vec<(i32, String)> = Vec::new();
+    let mut tags_to_check: Vec<String> = Vec::new();
     let mut deleted_tags: Vec<String> = Vec::new();
     let mut target: String = String::new();
 
@@ -241,7 +241,7 @@ fn buy(conn: &mut Connection, command: Command, id: u32) -> Result<()> {
                     "DELETE FROM tag_to_buy WHERE tag_id = ?1 AND buy_id = ?2",
                     params![tag_id, buy.id],
                 )?;
-                tags_to_check.push((tag_id, tag_name));
+                tags_to_check.push(tag_name);
             }
         }
     }
@@ -249,8 +249,8 @@ fn buy(conn: &mut Connection, command: Command, id: u32) -> Result<()> {
     tx.commit()?;
 
     if !tags_to_check.is_empty() {
-        for (tag_id, tag_name) in tags_to_check {
-            if let Some(tag_name) = tag_del_if_unused(conn, tag_id, tag_name.as_str())? {
+        for tag_name in tags_to_check {
+            if let Some(tag_name) = tag_del_if_unused(conn, tag_name.as_str())? {
                 deleted_tags.push(tag_name);
             }
         }
@@ -401,10 +401,13 @@ fn ride(conn: &mut Connection, command: Command, id: u32) -> Result<()> {
     }
 
     if command.category.is_some() && command.bike_id.is_none() {
-        err_exit!(format!("Params missed expected: '[category]:[bike_id]', but given '{}:'.", &command.category.unwrap()));
+        err_exit!(format!(
+            "Params missed expected: '[category]:[bike_id]', but given '{}:'.",
+            &command.category.unwrap()
+        ));
     }
 
-    let mut tags_to_check: Vec<(i32, String)> = Vec::new();
+    let mut tags_to_check: Vec<String> = Vec::new();
     let mut deleted_tags: Vec<String> = Vec::new();
 
     let mut ride: Ride = conn.query_row(
@@ -443,11 +446,11 @@ fn ride(conn: &mut Connection, command: Command, id: u32) -> Result<()> {
     }
 
     if let (Some(abbr), Some(bike_id)) = (command.category.get(), command.bike_id.get()) {
-        let bike:Bike = get_bike(conn, abbr.as_str(), bike_id)?;
+        let bike: Bike = get_bike(conn, abbr.as_str(), bike_id)?;
         ride.bike_id = bike.id;
         ride.abbr = abbr;
         ride.id_in_cat = bike_id;
-    } 
+    }
 
     let tx = conn.transaction()?;
 
@@ -459,8 +462,14 @@ fn ride(conn: &mut Connection, command: Command, id: u32) -> Result<()> {
             distance = ?3,
             annotation = ?4
         WHERE id = ?5
-        ", 
-        params![ride.bike_id, ride.datestamp, ride.distance, ride.annotation, ride.id],
+        ",
+        params![
+            ride.bike_id,
+            ride.datestamp,
+            ride.distance,
+            ride.annotation,
+            ride.id
+        ],
     )?;
 
     if !command.include_tags.is_empty() {
@@ -473,7 +482,6 @@ fn ride(conn: &mut Connection, command: Command, id: u32) -> Result<()> {
                     "INSERT INTO tag_to_ride (tag_id, ride_id) VALUES (?1, ?2)",
                     params![tag_id, ride.id],
                 )?;
-
             }
         }
     }
@@ -481,16 +489,16 @@ fn ride(conn: &mut Connection, command: Command, id: u32) -> Result<()> {
     if !command.exclude_tags.is_empty() {
         for tag_name in &command.exclude_tags {
             if let Ok(tag_id) = tx.query_row(
-                "SELECT id FROM tag WHERE name = ?1", 
-                params![tag_name], 
-                |row| row.get(0),
+                "SELECT id FROM tag WHERE name = ?1",
+                params![tag_name],
+                |row| row.get::<_, i32>(0),
             ) {
                 tx.execute(
                     "DELETE FROM tag_to_ride WHERE tag_id = ?1 AND ride_id = ?2",
                     params![tag_id, ride.id],
                 )?;
 
-                tags_to_check.push((tag_id, tag_name.clone()));
+                tags_to_check.push(tag_name.clone());
             }
         }
     }
@@ -498,8 +506,8 @@ fn ride(conn: &mut Connection, command: Command, id: u32) -> Result<()> {
     tx.commit()?;
 
     if !tags_to_check.is_empty() {
-        for (tag_id, tag_name) in tags_to_check {
-            if let Some(tag_name) = tag_del_if_unused(conn, tag_id, tag_name.as_str())? {
+        for tag_name in tags_to_check {
+            if let Some(tag_name) = tag_del_if_unused(conn, tag_name.as_str())? {
                 deleted_tags.push(tag_name);
             }
         }
@@ -510,13 +518,13 @@ fn ride(conn: &mut Connection, command: Command, id: u32) -> Result<()> {
         .filter(|t| !command.exclude_tags.contains(t))
         .map(|mut t| {
             t.insert(0, '+');
-            t 
+            t
         })
         .collect::<Vec<_>>()
         .join(", ");
 
     let mut annotation: String = String::new();
-    if !ride.annotation.is_empty(){
+    if !ride.annotation.is_empty() {
         annotation = format!("\"{}\"", ride.annotation);
     }
 
@@ -524,7 +532,13 @@ fn ride(conn: &mut Connection, command: Command, id: u32) -> Result<()> {
         "{}",
         format!(
             "Ride id:\"{0}\" modified to {1}:{2} {3} {4} {5} {6}",
-            ride.id, ride.abbr, ride.id_in_cat, ride.datestamp, ride.distance, &tags_str, &annotation,
+            ride.id,
+            ride.abbr,
+            ride.id_in_cat,
+            ride.datestamp,
+            ride.distance,
+            &tags_str,
+            &annotation,
         )
         .blue()
     );

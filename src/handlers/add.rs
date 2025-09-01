@@ -23,7 +23,9 @@ pub fn route(mut conn: Connection, command: Command) -> Result<()> {
 
 fn category(conn: &Connection, command: Command) -> Result<()> {
     if command.category.is_none() || command.annotation.is_empty() {
-        err_exit!("Command params missed.\nExpected: `bcl add cat:[marker] [\"Category name\"]`");
+        err_exit!(
+            "Command params missed.\nExpected: }bcl add cat:[marker] [\"Category name\"] {OPT}`"
+        );
     }
 
     let abbr: String = command.category.unwrap();
@@ -43,7 +45,9 @@ fn category(conn: &Connection, command: Command) -> Result<()> {
 
 fn bike(conn: &Connection, command: Command) -> Result<()> {
     if command.category.is_none() || command.annotation.is_empty() {
-        err_exit!("Command params missed.\nExpected: `bcl add bike:[marker] [\"Bicycle name\"]`");
+        err_exit!(
+            "Command params missed.\nExpected: `bcl add bike:[marker] [\"Bicycle name\"] {OPT}`"
+        );
     }
 
     let date: NaiveDate = command.date.to_naive();
@@ -76,7 +80,7 @@ fn bike(conn: &Connection, command: Command) -> Result<()> {
 
 fn chain_lub(conn: &Connection, command: Command) -> Result<()> {
     if command.category.is_none() || command.bike_id.is_none() {
-        err_exit!("Command params missed.\nExpected: `bcl add lub [marker]:[bike_id]`");
+        err_exit!("Command params missed.\nExpected: `bcl add lub [marker]:[bike_id] {OPT}`");
     }
 
     let date: NaiveDate = command.date.to_naive();
@@ -111,7 +115,9 @@ fn chain_lub(conn: &Connection, command: Command) -> Result<()> {
 
 fn buy(conn: &mut Connection, command: Command) -> Result<()> {
     if command.val.is_none() || command.annotation.is_empty() {
-        err_exit!("Command params missed.\nExpected: `bcl add buy [\"Product name\"] [price]`");
+        err_exit!(
+            "Command params missed.\nExpected: `bcl add buy [\"Product name\"] [price] {OPT}`"
+        );
     }
 
     let name: String = command.annotation.join(" ");
@@ -188,7 +194,7 @@ fn buy(conn: &mut Connection, command: Command) -> Result<()> {
 fn ride(conn: &mut Connection, command: Command) -> Result<()> {
     if command.category.is_none() || command.bike_id.is_none() || command.val.is_none() {
         err_exit!(
-            "Command params missed.\nExpected: `bcl add ride [category]:[bike_id] [distance]`"
+            "Command params missed.\nExpected: `bcl add ride [category]:[bike_id] [distance] {OPT}`"
         );
     }
 
