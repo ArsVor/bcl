@@ -24,7 +24,7 @@ pub fn route(mut conn: Connection, command: Command) -> Result<()> {
 fn category(conn: &Connection, command: Command) -> Result<()> {
     if command.category.is_none() || command.annotation.is_empty() {
         err_exit!(
-            "Command params missed.\nExpected: }bcl add cat:[marker] [\"Category name\"] {OPT}`"
+            "Command params missed.\nExpected: `bcl add cat:[marker] [\"Category name\"] {OPT}`"
         );
     }
 
@@ -54,15 +54,18 @@ fn bike(conn: &Connection, command: Command) -> Result<()> {
     let cat: Category = get_category(conn, command.category.unwrap().as_str()).unwrap();
     let name: String = command.annotation.join(" ");
 
-    let mut id_in_cat: i32 = conn.query_row(
-        "SELECT id_in_cat
+    let mut id_in_cat: i32 = conn
+        .query_row(
+            "SELECT id_in_cat
         FROM bike
         WHERE category_id = ?1
         ORDER BY id DESC
         LIMIT 1",
-        params![cat.id],
-        |row| row.get(0),
-    )?;
+            params![cat.id],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
     id_in_cat += 1;
 
     conn.execute(
@@ -74,7 +77,6 @@ fn bike(conn: &Connection, command: Command) -> Result<()> {
         "{}",
         format!("{0} \"{1}\" - added", &cat.name, &name).blue()
     );
-
     Ok(())
 }
 

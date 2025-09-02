@@ -18,7 +18,7 @@ fn main() {
         let command: Command = Command::from(args);
         // println!("{:?}", &command);
         let funk = command.funk.unwrap();
-        let _ = match funk.as_str() {
+        let result = match funk.as_str() {
             "add" => handlers::add::route(conn, command),
             "del" => handlers::delete::route(conn, command),
             "list" => handlers::list::route(conn, command),
@@ -31,6 +31,10 @@ fn main() {
             }
             _ => Ok(()),
         };
+
+        if let Err(e) = result {
+            err_exit!(&e);
+        }
         // println!("{:?}", db::queries::get_category(&conn, "G"))
         // println!("Is year? - {:?}", &command.date.year.is_some());
         // println!("Year is - {:?}", &command.date.year_or_now());

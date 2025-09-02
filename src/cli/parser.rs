@@ -1,25 +1,41 @@
+use rusqlite::{Connection, Result};
+
 use super::structs::Command;
+use crate::db::helpers::open_connection_with_fk;
 use crate::err_exit;
 
-pub fn get_bicycle_types() -> Vec<String> {
-    let bicycle_types: Vec<String> = vec!["G".to_string(), "R".to_string(), "M".to_string()];
-    bicycle_types
+pub fn get_bicycle_types() -> Result<Vec<String>> {
+    let conn: Connection = open_connection_with_fk("./bcl.db").unwrap();
+    
+    let mut stmt = conn.prepare("SELECT abbr FROM category")?;
+    let bicycle_types: Vec<String> = stmt
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .map(|res| res.unwrap())
+            .collect();
+
+    Ok(bicycle_types)
 }
 
 pub fn get_list_obj(arg: String) -> (String, Option<String>) {
-    let bicycle_types: Vec<String> = get_bicycle_types();
     let val: String = arg[1..].to_string();
 
-    if bicycle_types.contains(&val) {
-        ("bike".to_string(), Some(val))
-    } else {
-        (val, None)
+    match get_bicycle_types() {
+        Ok(bicycle_types) if bicycle_types.contains(&val) => ("bike".to_string(), Some(val)),
+        Ok(_) => (val, None),
+        Err(e) => {
+            err_exit!(&e);
+        }
     }
 }
 
 pub fn is_bike_type(val: &str) -> bool {
-    let bicycle_types: Vec<String> = get_bicycle_types();
-    bicycle_types.contains(&val.to_string())
+    match get_bicycle_types() {
+        Ok(bicycle_types) => bicycle_types.contains(&val.to_string()),
+        Err(e) => {
+            err_exit!(&e);
+        }
+    }
 }
 
 pub fn named_parse(mut command: Command, arg: String) -> Command {

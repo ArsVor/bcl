@@ -4,7 +4,7 @@ use owo_colors::OwoColorize;
 use rusqlite::{Connection, Result, ToSql, params, params_from_iter};
 
 use crate::cli::structs::Command;
-use crate::db::models::RideList;
+use crate::db::models::{Category, ChainLubricationList, RideList};
 use crate::db::queries::tag_del_if_unused;
 use crate::{err_exit, suc_exit};
 
@@ -30,11 +30,56 @@ fn buy(conn: &mut Connection, command: Command) -> Result<()> {
     Ok(())
 }
 fn category(conn: &mut Connection, command: Command) -> Result<()> {
-    Ok(())
+    let id: i32 = if let Some(id) = command.real_id.get() {
+        id as i32
+    } else {
+        err_exit!("Command params missed.\nExpected: `bcl del cat id:[stat_id]] {OPT}`");
+    };
+    
+    let result = conn.execute("DELETE FROM category WHERE id = ?1", params![id]);
+
+    match result {
+        Ok(_) => Ok(()),
+        Err(rusqlite::Error::SqliteFailure(err, _))
+                if err.code == rusqlite::ErrorCode::ConstraintViolation =>
+            {
+                err_exit!("You cannot delete a non-empty category.");
+            }
+            Err(e) => {
+                err_exit!(&e);
+            }
+    }
 }
+
 fn chain_lub(conn: &mut Connection, command: Command) -> Result<()> {
+    if command.id.is_none() && command.real_id.is_none() {
+        err_exit!("Command params missed.\nExpected: `bcl del lub id:[stat_id]/[dyn_id] {OPT}`");
+    }
+
+    let id: i32;
+
+    if let Some(real_id) = command.real_id.get() {
+        id = real_id as i32;
+    } else {
+        let dyn_id:usize = command.id.unwrap() as usize;
+        let lubs: Vec<ChainLubricationList> = helpers::get::chain_lub(conn, command)?;
+
+        id = lubs.get(dyn_id - 1).cloned().unwrap_or_else(|| {
+            err_exit!("Chain lubrication for your request was not found.");
+        }).lub_id;
+
+    }
+
+    conn.execute("DELETE FROM chain_lubrication WHERE id = ?1", params![id])?;
+
+    println!(
+        "{}",
+        format!("Chain lubrication id:{} deleted successfully.", &id).blue()
+    );
+
     Ok(())
 }
+
 fn ride(conn: &mut Connection, command: Command) -> Result<()> {
     if command.id.is_none() && command.real_id.is_none() {
         err_exit!("Command params missed.\nExpected: `bcl del ride id:[stat_id]/[dyn_id] {OPT}`.");
