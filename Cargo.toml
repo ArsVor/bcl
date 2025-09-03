@@ -8,3 +8,4 @@ chrono = "0.4.41"
 owo-colors = "4.2.2"
 rusqlite = {version = "0.37.0", features = ["chrono"]}
 tabled = "0.20.0"
+tempfile = "3.21.0"

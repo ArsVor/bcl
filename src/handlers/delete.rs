@@ -26,24 +26,25 @@ fn bike(conn: &Connection, command: Command) -> Result<()> {
         err_exit!("Command params missed.\nExpected: `bcl del bike id:[stat_id]/[dyn_id] {OPT}`.");
     }
 
-    let id: i32;
-
-    if let Some(real_id) = command.real_id.get() {
-        id = real_id as i32;
+    let id: i32 = if let Some(real_id) = command.real_id.get() {
+        real_id as i32
     } else {
         let dyn_id = command.id.unwrap() as usize;
         let bikes: Vec<BikeList> = helpers::get::bike(conn, command)?;
         let bike: BikeList = bikes.get(dyn_id - 1).cloned().unwrap_or_else(|| {
             err_exit!("Bike for your request was not found.");
         });
-        id = bike.bike_id;
-    }
+        bike.bike_id
+    };
 
     let result = conn.execute("DELETE FROM bike WHERE id = ?1", params![id]);
 
     match result {
         Ok(_) => {
-            println!("{}", format!("Bike id:{} deleted successfully.", &id).blue());
+            println!(
+                "{}",
+                format!("Bike id:{} deleted successfully.", &id).blue()
+            );
             Ok(())
         }
         Err(rusqlite::Error::SqliteFailure(err, _))
@@ -62,23 +63,22 @@ fn buy(conn: &mut Connection, command: Command) -> Result<()> {
         err_exit!("Command params missed.\nExpected: `bcl del buy id:[stat_id]/[dyn_id] {OPT}`.");
     }
 
-    let id: i32;
     let mut tags: Vec<String> = Vec::new();
     let mut deleted_tags: Vec<String> = Vec::new();
 
-    if let Some(real_id) = command.real_id.get() {
-        id = real_id as i32;
+    let id: i32 = if let Some(real_id) = command.real_id.get() {
         if let Ok(tags_row) = conn.query_row(
             "SELECT
                 COALESCE(GROUP_CONCAT(t.name, ', '), '') AS tags
             FROM tag_to_buy tb
             JOIN tag t ON t.id = tb.tag_id
             WHERE tb.buy_id = ?1",
-            params![id],
+            params![real_id],
             |row| row.get::<_, String>(0),
         ) {
             tags.extend(tags_row.split(", ").map(|s| s.to_string()));
         }
+        real_id as i32
     } else {
         let dyn_id: usize = command.id.unwrap() as usize;
         let buys: Vec<BuyList> = helpers::get::buy(conn, command)?;
@@ -86,9 +86,9 @@ fn buy(conn: &mut Connection, command: Command) -> Result<()> {
         let buy: BuyList = buys.get(dyn_id - 1).cloned().unwrap_or_else(|| {
             err_exit!("buy for your request was not found.");
         });
-        id = buy.buy_id;
         tags.extend(buy.tags.split(", ").map(|s| s.to_string()));
-    }
+        buy.buy_id
+    };
 
     conn.execute("DELETE FROM buy WHERE id = ?1", params![id])?;
     println!("TAGS: {:?}", &tags);
@@ -123,7 +123,10 @@ fn category(conn: &Connection, command: Command) -> Result<()> {
 
     match result {
         Ok(_) => {
-            println!("{}", format!("Category id:{} deleted successfully.", &id).blue());
+            println!(
+                "{}",
+                format!("Category id:{} deleted successfully.", &id).blue()
+            );
             Ok(())
         }
         Err(rusqlite::Error::SqliteFailure(err, _))
@@ -142,22 +145,21 @@ fn chain_lub(conn: &Connection, command: Command) -> Result<()> {
         err_exit!("Command params missed.\nExpected: `bcl del lub id:[stat_id]/[dyn_id] {OPT}`");
     }
 
-    let id: i32;
-
-    if let Some(real_id) = command.real_id.get() {
-        id = real_id as i32;
+    let id: i32 = if let Some(real_id) = command.real_id.get() {
+        real_id as i32
     } else {
         let dyn_id: usize = command.id.unwrap() as usize;
         let lubs: Vec<ChainLubricationList> = helpers::get::chain_lub(conn, command)?;
 
-        id = lubs
+        let id: i32 = lubs
             .get(dyn_id - 1)
             .cloned()
             .unwrap_or_else(|| {
                 err_exit!("Chain lubrication for your request was not found.");
             })
             .lub_id;
-    }
+        id
+    };
 
     conn.execute("DELETE FROM chain_lubrication WHERE id = ?1", params![id])?;
 
@@ -174,23 +176,22 @@ fn ride(conn: &mut Connection, command: Command) -> Result<()> {
         err_exit!("Command params missed.\nExpected: `bcl del ride id:[stat_id]/[dyn_id] {OPT}`.");
     }
 
-    let id: i32;
     let mut tags: Vec<String> = Vec::new();
     let mut deleted_tags: Vec<String> = Vec::new();
 
-    if let Some(real_id) = command.real_id.get() {
-        id = real_id as i32;
+    let id: i32 = if let Some(real_id) = command.real_id.get() {
         if let Ok(tags_row) = conn.query_row(
             "SELECT
                 COALESCE(GROUP_CONCAT(t.name, ', '), '') AS tags
             FROM tag_to_ride tr
             JOIN tag t ON t.id = tr.tag_id
             WHERE tr.ride_id = ?1",
-            params![id],
+            params![real_id],
             |row| row.get::<_, String>(0),
         ) {
             tags.extend(tags_row.split(", ").map(|s| s.to_string()));
         }
+        real_id as i32
     } else {
         let dyn_id: usize = command.id.unwrap() as usize;
         let rides: Vec<RideList> = helpers::get::ride(conn, command)?;
@@ -198,9 +199,9 @@ fn ride(conn: &mut Connection, command: Command) -> Result<()> {
         let ride: RideList = rides.get(dyn_id - 1).cloned().unwrap_or_else(|| {
             err_exit!("Ride for your request was not found.");
         });
-        id = ride.ride_id;
         tags.extend(ride.tags.split(", ").map(|s| s.to_string()));
-    }
+        ride.ride_id
+    };
 
     conn.execute("DELETE FROM ride WHERE id = ?1", params![id])?;
 

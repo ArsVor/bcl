@@ -1,6 +1,11 @@
 use chrono::NaiveDate;
 use rusqlite::{Connection, Result, ToSql, params_from_iter};
 use std::collections::HashSet;
+use std::env;
+use std::fs::{File, write, read_to_string};
+use std::io::Write;
+use std::process;
+use tempfile::NamedTempFile;
 
 use crate::cli::structs::{Command, Date, Field};
 use crate::db::models::{BikeList, BuyList, Category, ChainLubricationList, RideList};
@@ -62,39 +67,55 @@ pub mod get {
     }
 
     pub fn bike(conn: &Connection, command: Command) -> Result<Vec<BikeList>> {
-        let bikes: Vec<BikeList> = if let Some(cat_str) = command.category.get() {
-            let cat = get_category(conn, &cat_str)?;
-            let mut stmt = conn.prepare(
-                "
-                SELECT 
-                    ROW_NUMBER() OVER (ORDER BY b.id) AS row_num,
-                    b.id, 
-                    c.abbr, 
-                    b.name, 
-                    b.datestamp  
-                FROM bike b 
-                    JOIN category c ON c.id = b.category_id
-                WHERE category_id = ?1
-            ",
-            )?;
-            stmt.query_map([cat.id], BikeList::from_row)?
-                .collect::<Result<Vec<_>, _>>()?
+        let mut select_sql: String = "
+            SELECT 
+                ROW_NUMBER() OVER (ORDER BY b.id) AS row_num,
+                b.id, 
+                c.abbr, 
+                b.name, 
+                b.datestamp  
+            FROM bike b 
+                JOIN category c ON c.id = b.category_id
+        ".to_string();
+        let mut where_sql: Vec<String> = vec![];
+        let mut dyn_params: Vec<Box<dyn ToSql>> = Vec::new();
+
+        if let Some(real_id) = command.real_id.get() {
+            where_sql.push(format!("b.id = ?{}", where_sql.len() + 1));
+            dyn_params.push(Box::new(real_id));
         } else {
-            let mut stmt = conn.prepare(
-                "
-                SELECT 
-                    ROW_NUMBER() OVER (ORDER BY b.id) AS row_num,
-                    b.id, 
-                    c.abbr, 
-                    b.name, 
-                    b.datestamp  
-                FROM bike b 
-                    JOIN category c ON c.id = b.category_id
-            ",
-            )?;
-            stmt.query_map([], BikeList::from_row)?
-                .collect::<Result<Vec<_>, _>>()?
-        };
+            if let Some(category) = command.category.get() {
+                where_sql.push(format!("c.abbr = ?{}", where_sql.len() + 1));
+                dyn_params.push(Box::new(category));
+            }
+
+            if let Some(bike_id) = command.bike_id.get() {
+                where_sql.push(format!("b.id_in_cat = ?{}", where_sql.len() + 1));
+                dyn_params.push(Box::new(bike_id));
+            }
+
+            if !command.annotation.is_empty() {
+                let name: String = command.annotation.join(" ");
+                where_sql.push(format!("b.name LIKE ?{}", where_sql.len() + 1));
+                dyn_params.push(Box::new(format!("%{}%", &name)));
+            }
+
+        }
+
+        if !where_sql.is_empty() {
+            select_sql.push_str(" WHERE ");
+            select_sql.push_str(&where_sql.join(" AND "));
+        }
+
+        select_sql
+            .push_str("GROUP BY b.id ORDER BY b.datestamp DESC");
+        if command.lim > 0 {
+            select_sql.push_str(&format!(" LIMIT {}", &command.lim));
+        }
+
+        let mut stmt = conn.prepare(&select_sql)?;
+        let bikes: Vec<BikeList> = stmt.query_map(params_from_iter(dyn_params.iter().map(|b| b.as_ref())), BikeList::from_row)?
+            .collect::<Result<Vec<_>, _>>()?;
 
         Ok(bikes)
     }
@@ -140,6 +161,11 @@ pub mod get {
 
         let bike_id: Option<u8> = command.bike_id.get();
         let category: Option<String> = command.category.get();
+
+        if let Some(real_id) = command.real_id.get() {
+            where_sql.push(format!("b.id = ?{}", where_sql.len() + 1));
+            dyn_params.push(Box::new(real_id));
+        }
 
         if val.is_some() {
             where_sql.push(format!("b.price = ?{}", where_sql.len() + 1));
@@ -256,6 +282,11 @@ pub mod get {
         let bike_id: Option<u8> = command.bike_id.get();
         let category: Option<String> = command.category.get();
 
+        if let Some(real_id) = command.real_id.get() {
+            where_sql.push(format!("r.id = ?{}", where_sql.len() + 1));
+            dyn_params.push(Box::new(real_id));
+        }
+
         if val.is_some() {
             where_sql.push(format!("r.distance = ?{}", where_sql.len() + 1));
             dyn_params.push(Box::new(val.unwrap()));
@@ -362,6 +393,11 @@ pub mod get {
         let bike_id: Option<u8> = command.bike_id.get();
         let category: Option<String> = command.category.get();
 
+        if let Some(real_id) = command.real_id.get() {
+            where_sql.push(format!("l.id = ?{}", where_sql.len() + 1));
+            dyn_params.push(Box::new(real_id));
+        }
+
         if let Some(date) = date {
             match eq {
                 true => where_sql.push(format!("l.datestamp = ?{}", where_sql.len() + 1)),
@@ -416,5 +452,94 @@ pub mod get {
         }
 
         Ok(lubs)
+    }
+}
+
+pub mod editor {
+    use super::*;
+
+    pub fn edit_bike(mut bike: BikeList) -> std::io::Result<BikeList> {
+        // 1. Створюємо тимчасовий файл
+        let mut tmp = NamedTempFile::new()?;
+
+        // 2. Пишемо дані bike у файл у зручному для редагування форматі
+        writeln!(tmp, "id: {}", bike.id)?;
+        writeln!(tmp, "bike_id: {}", bike.bike_id)?;
+        writeln!(tmp, "category: {}", bike.category)?;
+        writeln!(tmp, "name: {}", bike.bike)?;
+        writeln!(tmp, "date: {}", bike.added)?;
+
+        tmp.flush()?;
+
+        // 3. Визначаємо редактор
+        let editor = env::var("EDITOR").unwrap_or_else(|_| "vi".to_string());
+
+        // 4. Запускаємо редактор
+        process::Command::new(editor)
+            .arg(tmp.path())
+            .status()
+            .expect("failed to run editor");
+
+        // 5. Читаємо файл після редагування
+        let content = read_to_string(tmp.path())?;
+
+        // 6. Парсимо назад у bikeList (тут простий варіант, можна зробити нормальний парсер)
+        for line in content.lines() {
+            let mut parts = line.splitn(2, ": ");
+            let key = parts.next().unwrap_or("");
+            let val = parts.next().unwrap_or("");
+            match key {
+                "category" => bike.category = val.to_string(),
+                "name" => bike.bike = val.to_string(),
+                "date" => bike.added = val.parse().unwrap_or(bike.added),
+                _ => {}
+            }
+        }
+
+        Ok(bike)
+    }
+    pub fn edit_buy(mut buy: BuyList) -> std::io::Result<BuyList> {
+        // 1. Створюємо тимчасовий файл
+        let mut tmp = NamedTempFile::new()?;
+
+        // 2. Пишемо дані buy у файл у зручному для редагування форматі
+        writeln!(tmp, "id: {}", buy.id)?;
+        writeln!(tmp, "buy_id: {}", buy.buy_id)?;
+        writeln!(tmp, "target: {}", buy.target)?;
+        writeln!(tmp, "tags: {}", buy.tags)?;
+        writeln!(tmp, "name: {}", buy.name)?;
+        writeln!(tmp, "price: {}", buy.price)?;
+        writeln!(tmp, "date: {}", buy.date)?;
+
+        tmp.flush()?;
+
+        // 3. Визначаємо редактор
+        let editor = env::var("EDITOR").unwrap_or_else(|_| "vi".to_string());
+
+        // 4. Запускаємо редактор
+        process::Command::new(editor)
+            .arg(tmp.path())
+            .status()
+            .expect("failed to run editor");
+
+        // 5. Читаємо файл після редагування
+        let content = read_to_string(tmp.path())?;
+
+        // 6. Парсимо назад у BuyList (тут простий варіант, можна зробити нормальний парсер)
+        for line in content.lines() {
+            let mut parts = line.splitn(2, ": ");
+            let key = parts.next().unwrap_or("");
+            let val = parts.next().unwrap_or("");
+            match key {
+                "target" => buy.target = val.to_string(),
+                "tags" => buy.tags = val.to_string(),
+                "name" => buy.name = val.to_string(),
+                "price" => buy.price = val.parse().unwrap_or(buy.price),
+                "date" => buy.date = val.parse().unwrap_or(buy.date),
+                _ => {}
+            }
+        }
+
+        Ok(buy)
     }
 }
