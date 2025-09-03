@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use chrono::NaiveDate;
-use rusqlite::{params, Connection, OptionalExtension, Result, Transaction};
+use rusqlite::{Connection, OptionalExtension, Result, Transaction, params};
 
 use crate::{cli::structs::Command, err_exit};
 
@@ -29,10 +29,7 @@ pub fn get_included_excluded(
             if i == 0 {
                 include_id = id_set;
             } else {
-                include_id = include_id
-                    .intersection(&id_set)
-                    .copied()
-                    .collect();
+                include_id = include_id.intersection(&id_set).copied().collect();
             }
         }
     }
@@ -50,17 +47,18 @@ pub fn get_category(conn: &Connection, abbr: &str) -> Result<Category> {
 
 pub fn get_bike(conn: &Connection, abbr: &str, bike_id: u8) -> Result<Bike> {
     conn.query_row(
-            "SELECT * FROM bike b
+        "SELECT * FROM bike b
              JOIN category c ON c.id = b.category_id
              WHERE c.abbr = ?1 AND b.id_in_cat = ?2",
-            params![abbr, bike_id],
-            Bike::from_row,
-        ).map_err(|e| match e {
-            rusqlite::Error::QueryReturnedNoRows => {
-                err_exit!(format!("bike - '{}:{}' does not exist.", &abbr, &bike_id));
-            },
-            _ => e,
-        })
+        params![abbr, bike_id],
+        Bike::from_row,
+    )
+    .map_err(|e| match e {
+        rusqlite::Error::QueryReturnedNoRows => {
+            err_exit!(format!("bike - '{}:{}' does not exist.", &abbr, &bike_id));
+        }
+        _ => e,
+    })
 }
 
 pub fn tag_get_or_create(conn: &Connection, tag_name: &str) -> Result<i32> {
@@ -90,7 +88,6 @@ pub fn tag_get_or_create_tx(tx: &Transaction, tag_name: &str) -> Result<i32> {
 }
 
 pub fn tag_del_if_unused(conn: &mut Connection, tag_name: &str) -> Result<Option<String>> {
-    println!("STARTED");
     let exists: bool = conn.query_row(
         "SELECT EXISTS(
             SELECT 1 FROM tag_to_buy ttb JOIN tag t ON t.id = ttb.tag_id WHERE t.name = ?1
@@ -104,10 +101,7 @@ pub fn tag_del_if_unused(conn: &mut Connection, tag_name: &str) -> Result<Option
         return Ok(None);
     }
 
-    conn.execute(
-        "DELETE FROM tag WHERE name = ?1", 
-        params![tag_name]
-    )?;
+    conn.execute("DELETE FROM tag WHERE name = ?1", params![tag_name])?;
 
     Ok(Some(tag_name.to_string()))
 }
@@ -181,16 +175,18 @@ pub fn get_buy_id_with_bike(conn: &Connection, bike_id: i32) -> Result<HashSet<i
 }
 
 pub fn get_lub_info(conn: &Connection, bike_id: u8) -> Result<f32> {
-    let datestamp: Option<NaiveDate> = conn.query_row(
-        "SELECT datestamp
+    let datestamp: Option<NaiveDate> = conn
+        .query_row(
+            "SELECT datestamp
          FROM chain_lubrication
          WHERE bike_id = ?1
          ORDER BY id DESC
          LIMIT 1",
-        params![bike_id],
-        |row| row.get(0),
-    ).optional()?;
-    
+            params![bike_id],
+            |row| row.get(0),
+        )
+        .optional()?;
+
     let distance: f32 = if let Some(date) = datestamp {
         conn.query_row(
             "SELECT
@@ -201,7 +197,7 @@ pub fn get_lub_info(conn: &Connection, bike_id: u8) -> Result<f32> {
             |row| row.get(0),
         )?
     } else {
-         conn.query_row(
+        conn.query_row(
             "SELECT
             COALESCE(SUM(distance), 0)
             FROM ride

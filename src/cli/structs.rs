@@ -316,7 +316,7 @@ impl Command {
                         .funk
                         .set_or_err(Some("list".to_string()), "multiple command input.");
                 }
-                "buy" | "lub" | "ride" | "cat" | "tag" => {
+                "bike" | "buy" | "lub" | "ride" | "cat" | "tag" => {
                     command
                         .object
                         .set_or_err(Some(arg), "multiple object input.");

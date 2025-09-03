@@ -1,5 +1,4 @@
 use chrono::NaiveDate;
-use owo_colors::OwoColorize;
 use rusqlite::{Result, Row};
 use std::fmt;
 use tabled::Tabled;
