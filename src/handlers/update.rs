@@ -2,7 +2,7 @@ use owo_colors::OwoColorize;
 use rusqlite::{Connection, Result, params};
 
 use crate::cli::structs::Command;
-use crate::db::models::{Bike, Buy, Category, ChainLubrication, Opt, Ride};
+use crate::db::models::{Bike, Buy, Category, ChainLubrication, Ride};
 use crate::db::queries::{get_bike, get_category, tag_del_if_unused, tag_get_or_create_tx};
 use crate::{err_exit, suc_exit};
 
@@ -345,7 +345,7 @@ fn lub(conn: &Connection, command: Command, id: u32) -> Result<()> {
     )?;
 
     if !command.annotation.is_empty() {
-        lub.annotation = Opt(Some(command.annotation.join(" ")));
+        lub.annotation = command.annotation.join(" ");
     }
 
     if command.date.is_some() {
@@ -370,17 +370,14 @@ fn lub(conn: &Connection, command: Command, id: u32) -> Result<()> {
             datestamp = ?2,
             annotation = ?3
         WHERE id = ?4",
-        params![lub.bike_id, lub.datestamp, lub.annotation.unwrap(), lub.id],
+        params![lub.bike_id, lub.datestamp, lub.annotation, lub.id],
     )?;
 
     println!(
         "{}",
         format!(
             "Chain Lubrication id:\"{0}\" modified to: {1} {2} {3}",
-            &lub.id,
-            &bike_abbr,
-            &lub.datestamp,
-            &lub.annotation.0.unwrap_or_default()
+            &lub.id, &bike_abbr, &lub.datestamp, &lub.annotation
         )
         .blue()
     );

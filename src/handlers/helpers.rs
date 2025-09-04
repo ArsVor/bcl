@@ -2,14 +2,15 @@ use chrono::NaiveDate;
 use rusqlite::{Connection, Result, ToSql, params_from_iter};
 use std::collections::HashSet;
 use std::env;
-use std::fs::{File, write, read_to_string};
+use std::fs::read_to_string;
 use std::io::Write;
 use std::process;
 use tempfile::NamedTempFile;
 
 use crate::cli::structs::{Command, Date, Field};
 use crate::db::models::{BikeList, BuyList, Category, ChainLubricationList, RideList};
-use crate::db::queries::{get_category, get_included_excluded};
+use crate::db::queries::get_included_excluded;
+use crate::err_exit;
 
 pub fn get_date(date_parts: Date) -> Option<NaiveDate> {
     if date_parts.day.is_some() {
@@ -53,6 +54,49 @@ pub mod get {
         Ok(categories)
     }
 
+    pub fn category_with_params(conn: &Connection, command: Command) -> Result<Category> {
+        let mut select_sql: String = "SELECT * FROM category".to_string();
+        let mut where_sql: Vec<String> = vec![];
+        let mut dyn_params: Vec<Box<dyn ToSql>> = Vec::new();
+
+        if let Some(id) = command.real_id.get().or(command.id.get()) {
+            where_sql.push(format!("id =?{}", where_sql.len() + 1));
+            dyn_params.push(Box::new(id));
+        };
+
+        if let Some(abbr) = command.category.get() {
+            where_sql.push(format!("abbr = ?{}", where_sql.len() + 1));
+            dyn_params.push(Box::new(abbr));
+        };
+
+        if !command.annotation.is_empty() {
+            let name: String = command.annotation.join(" ");
+            where_sql.push(format!("name LIKE ?{}", where_sql.len() + 1));
+            dyn_params.push(Box::new(format!("%{}%", &name)));
+        };
+
+        if !where_sql.is_empty() {
+            select_sql.push_str(" WHERE ");
+            select_sql.push_str(&where_sql.join(" AND "));
+        }
+
+        let mut stmt = conn.prepare(&select_sql)?;
+        let mut categories: Vec<Category> = stmt
+            .query_map(
+                params_from_iter(dyn_params.iter().map(|b| b.as_ref())),
+                Category::from_row,
+            )?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        if categories.len() > 1 {
+            err_exit!("Not enoughs params. Can't select 1 bike.");
+        } else if let Some(category) = categories.pop() {
+            Ok(category)
+        } else {
+            err_exit!("bike category for your request was not found.");
+        }
+    }
+
     pub fn tag(conn: &Connection) -> Result<Vec<String>> {
         let mut stmt = conn.prepare("SELECT name FROM tag")?;
         let tag_iter = stmt.query_map([], |row| row.get::<_, String>(0))?;
@@ -76,7 +120,8 @@ pub mod get {
                 b.datestamp  
             FROM bike b 
                 JOIN category c ON c.id = b.category_id
-        ".to_string();
+        "
+        .to_string();
         let mut where_sql: Vec<String> = vec![];
         let mut dyn_params: Vec<Box<dyn ToSql>> = Vec::new();
 
@@ -99,7 +144,6 @@ pub mod get {
                 where_sql.push(format!("b.name LIKE ?{}", where_sql.len() + 1));
                 dyn_params.push(Box::new(format!("%{}%", &name)));
             }
-
         }
 
         if !where_sql.is_empty() {
@@ -107,14 +151,17 @@ pub mod get {
             select_sql.push_str(&where_sql.join(" AND "));
         }
 
-        select_sql
-            .push_str("GROUP BY b.id ORDER BY b.datestamp DESC");
+        select_sql.push_str("GROUP BY b.id ORDER BY b.id_in_cat");
         if command.lim > 0 {
             select_sql.push_str(&format!(" LIMIT {}", &command.lim));
         }
 
         let mut stmt = conn.prepare(&select_sql)?;
-        let bikes: Vec<BikeList> = stmt.query_map(params_from_iter(dyn_params.iter().map(|b| b.as_ref())), BikeList::from_row)?
+        let bikes: Vec<BikeList> = stmt
+            .query_map(
+                params_from_iter(dyn_params.iter().map(|b| b.as_ref())),
+                BikeList::from_row,
+            )?
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(bikes)
@@ -456,6 +503,7 @@ pub mod get {
 }
 
 pub mod editor {
+
     use super::*;
 
     pub fn edit_bike(mut bike: BikeList) -> std::io::Result<BikeList> {
@@ -498,11 +546,10 @@ pub mod editor {
 
         Ok(bike)
     }
+
     pub fn edit_buy(mut buy: BuyList) -> std::io::Result<BuyList> {
-        // 1. Створюємо тимчасовий файл
         let mut tmp = NamedTempFile::new()?;
 
-        // 2. Пишемо дані buy у файл у зручному для редагування форматі
         writeln!(tmp, "id: {}", buy.id)?;
         writeln!(tmp, "buy_id: {}", buy.buy_id)?;
         writeln!(tmp, "target: {}", buy.target)?;
@@ -513,19 +560,15 @@ pub mod editor {
 
         tmp.flush()?;
 
-        // 3. Визначаємо редактор
         let editor = env::var("EDITOR").unwrap_or_else(|_| "vi".to_string());
 
-        // 4. Запускаємо редактор
         process::Command::new(editor)
             .arg(tmp.path())
             .status()
             .expect("failed to run editor");
 
-        // 5. Читаємо файл після редагування
         let content = read_to_string(tmp.path())?;
 
-        // 6. Парсимо назад у BuyList (тут простий варіант, можна зробити нормальний парсер)
         for line in content.lines() {
             let mut parts = line.splitn(2, ": ");
             let key = parts.next().unwrap_or("");
@@ -541,5 +584,110 @@ pub mod editor {
         }
 
         Ok(buy)
+    }
+
+    pub fn edit_cat(mut category: Category) -> std::io::Result<Category> {
+        let mut tmp = NamedTempFile::new()?;
+
+        writeln!(tmp, "id: {}", category.id)?;
+        writeln!(tmp, "abbr: {}", category.abbr)?;
+        writeln!(tmp, "name: {}", category.name)?;
+
+        tmp.flush()?;
+
+        let editor = env::var("EDITOR").unwrap_or_else(|_| "vi".to_string());
+
+        process::Command::new(editor)
+            .arg(tmp.path())
+            .status()
+            .expect("failed to run editor");
+
+        let content = read_to_string(tmp.path())?;
+
+        for line in content.lines() {
+            let mut parts = line.splitn(2, ": ");
+            let key = parts.next().unwrap_or("");
+            let val = parts.next().unwrap_or("");
+            match key {
+                "abbr" => category.abbr = val.to_string(),
+                "name" => category.name = val.to_string(),
+                _ => {}
+            }
+        }
+
+        Ok(category)
+    }
+
+    pub fn edit_lub(mut lub: ChainLubricationList) -> std::io::Result<ChainLubricationList> {
+        let mut tmp = NamedTempFile::new()?;
+
+        writeln!(tmp, "id: {}", lub.lub_id)?;
+        writeln!(tmp, "bike: {}", lub.bike)?;
+        writeln!(tmp, "date: {}", lub.date)?;
+        writeln!(tmp, "annotation: {}", lub.annotation)?;
+
+        tmp.flush()?;
+
+        let editor = env::var("EDITOR").unwrap_or_else(|_| "vi".to_string());
+
+        process::Command::new(editor)
+            .arg(tmp.path())
+            .status()
+            .expect("failed to run editor");
+
+        let content = read_to_string(tmp.path())?;
+
+        for line in content.lines() {
+            let mut parts = line.splitn(2, ": ");
+            let key = parts.next().unwrap_or("");
+            let val = parts.next().unwrap_or("");
+            match key {
+                "bike" => lub.bike = val.to_string(),
+                "date" => lub.date = val.parse().unwrap_or(lub.date),
+                "annotation" => lub.annotation = val.to_string(),
+                _ => {}
+            }
+        }
+
+        Ok(lub)
+    }
+
+    pub fn edit_ride(mut ride: RideList) -> std::io::Result<RideList> {
+        let mut tmp = NamedTempFile::new()?;
+
+        writeln!(tmp, "id: {}", ride.id)?;
+        writeln!(tmp, "ride_id: {}", ride.ride_id)?;
+        writeln!(tmp, "bike: {}", ride.bike)?;
+        writeln!(tmp, "date: {}", ride.date)?;
+        writeln!(tmp, "distance: {}", ride.distance)?;
+        writeln!(tmp, "tags: {}", ride.tags)?;
+        writeln!(tmp, "annotation: {}", ride.annotation)?;
+
+        tmp.flush()?;
+
+        let editor = env::var("EDITOR").unwrap_or_else(|_| "vi".to_string());
+
+        process::Command::new(editor)
+            .arg(tmp.path())
+            .status()
+            .expect("failed to run editor");
+
+        let content = read_to_string(tmp.path())?;
+
+        for line in content.lines() {
+            let mut parts = line.splitn(2, ": ");
+            let key = parts.next().unwrap_or("");
+            let val = parts.next().unwrap_or("");
+            match key {
+                "bike" => ride.bike = val.to_string(),
+                "date" => ride.date = val.parse().unwrap_or(ride.date),
+                "distance" => ride.distance = val.parse().unwrap_or(ride.distance),
+                "tags" => ride.tags = val.to_string(),
+                "annotation" => ride.annotation = val.to_string(),
+                _ => {}
+            }
+        }
+
+        Ok(ride)
     }
 }

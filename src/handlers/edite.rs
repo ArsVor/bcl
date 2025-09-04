@@ -1,7 +1,8 @@
-use rusqlite::{params, Connection, Result};
+use owo_colors::OwoColorize;
+use rusqlite::{Connection, Result, params};
 
 use crate::cli::structs::Command;
-use crate::db::models::{BikeList, BuyList, ChainLubricationList, RideList};
+use crate::db::models::{BikeList, BuyList, Category, ChainLubricationList, RideList};
 use crate::err_exit;
 
 use super::helpers;
@@ -20,119 +21,97 @@ pub fn route(mut conn: Connection, command: Command) -> Result<()> {
 
 fn bike(conn: &Connection, command: Command) -> Result<()> {
     let id = command.id.get();
-    let mut bike_list: Vec<BikeList> = helpers::get::bike(conn, command)?;
+    let mut bikes: Vec<BikeList> = helpers::get::bike(conn, command)?;
 
-    if bike_list.is_empty() {
-        err_exit!("Bike for your request was not found.");
-    }
-        
-    let mut bike: BikeList = if bike_list.len() > 1 {
-        let dyn_id = if let Some(id) = id {
-            id as usize
-        } else {
-            err_exit!("Not enoughs params. Can't select 1 bike.");
-        };
-        bike_list.get(dyn_id - 1).cloned().unwrap_or_else(|| {
+    let mut bike: BikeList = match (bikes.len(), id) {
+        (0, _) => {
             err_exit!("Bike for your request was not found.");
-        })
-    } else {
-        bike_list.pop().unwrap()
+        },
+        (1, None) => bikes.pop().unwrap(),
+        (_, Some(dyn_id)) => bikes.get(dyn_id as usize - 1).cloned().unwrap_or_else(||{
+            err_exit!("Bike for your request was not found.");
+        }),
+        _ => {
+            err_exit!("Not enough params. Can't select 1 bike.");
+        }
     };
 
     bike = helpers::editor::edit_bike(bike).expect("failed to edit buy");
+    // println!("Now name: {}", &bike.bike);
 
     Ok(())
 }
 
 fn buy(conn: &mut Connection, command: Command) -> Result<()> {
-    if command.id.is_none() && command.real_id.is_none() {
-        err_exit!(
-            "Command params missed.\nExpected: `bcl [dynamic id]/id:[static id] edit buy [PARAMS]`."
-        );
-    }
-    let real_id: Option<u32> = command.real_id.get();
+    let id: Option<u32> = command.id.get();
+    let mut buys: Vec<BuyList> = helpers::get::buy(conn, command)?;
 
-    let mut buy_list: Vec<BuyList> = if command.real_id.is_some() {
-        helpers::get::buy(conn, command)?
-    } else {
-        let dyn_id: usize = command.id.unwrap() as usize;
-        let buys: Vec<BuyList> = helpers::get::buy(conn, command)?;
-
-        let buy: BuyList = buys.get(dyn_id - 1).cloned().unwrap_or_else(|| {
-            err_exit!("buy for your request was not found.");
-        });
-        vec![buy]
-    };
-
-    let mut buy: BuyList = if let Some(buy) = buy_list.pop() {
-        buy
-    } else {
-        err_exit!(format!("buy id:{} does not exist.", real_id.unwrap()));
+    let mut buy: BuyList = match (buys.len(), id) {
+        (0, _) => {
+            err_exit!("Buy for your request was not found.");
+        },
+        (1, None) => buys.pop().unwrap(),
+        (_, Some(dyn_id)) => buys.get(dyn_id as usize - 1).cloned().unwrap_or_else(|| {
+            err_exit!("Buy for your request was not found.");
+        }),
+        _ => {
+            err_exit!("Not enough params. Can't select 1 buy.");
+        }
     };
 
     buy = helpers::editor::edit_buy(buy).expect("failed to edit buy");
+    // println!("Now date: {}; name: {}", &buy.date, &buy.name);
 
     Ok(())
 }
+
 fn category(conn: &Connection, command: Command) -> Result<()> {
-    if command.id.is_none() && command.real_id.is_none() {
-        err_exit!(
-            "Command params missed.\nExpected: `bcl [dynamic id]/id:[static id] edit cat [PARAMS]`."
-        );
-    }
+    let mut category: Category = helpers::get::category_with_params(conn, command)?;
 
-    let id:i32 = if let Some(real_id) = command.real_id.get() {
-        real_id as i32
-    } else {
-        command.id.unwrap() as i32
-    };
-
+    category = helpers::editor::edit_cat(category).expect("failed to edit cat");
 
     Ok(())
 }
+
 fn chain_lub(conn: &Connection, command: Command) -> Result<()> {
-    if command.id.is_none() && command.real_id.is_none() {
-        err_exit!(
-            "Command params missed.\nExpected: `bcl [dynamic id]/id:[static id] edit lub [PARAMS]`."
-        );
-    }
+    let id: Option<u32> = command.id.get();
+    let mut lubs: Vec<ChainLubricationList> = helpers::get::chain_lub(conn, command)?;
 
-    let id: i32 = if let Some(real_id) = command.real_id.get() {
-        real_id as i32
-    } else {
-        let dyn_id: usize = command.id.unwrap() as usize;
-        let lubs: Vec<ChainLubricationList> = helpers::get::chain_lub(conn, command)?;
-
-        let id: i32 = lubs
-            .get(dyn_id - 1)
-            .cloned()
-            .unwrap_or_else(|| {
-                err_exit!("Chain lubrication for your request was not found.");
-            })
-            .lub_id;
-        id
+    let mut lub: ChainLubricationList = match (lubs.len(), id) {
+        (0, _) => {
+            err_exit!("Chain lubrication for your request was not found.");
+        },
+        (1, None) => lubs.pop().unwrap(),
+        (_, Some(dyn_id)) => lubs.get(dyn_id as usize - 1).cloned().unwrap_or_else(|| {
+            err_exit!("Chain lubrication for your request was not found.");
+        }),
+        _ => {
+            err_exit!("Not enough params. Can't select 1 lub.");
+        }
     };
+
+    lub = helpers::editor::edit_lub(lub).expect("failed to edit lub");
 
     Ok(())
 }
 fn ride(conn: &mut Connection, command: Command) -> Result<()> {
-    if command.id.is_none() && command.real_id.is_none() {
-        err_exit!(
-            "Command params missed.\nExpected: `bcl [dynamic id]/id:[static id] edit ride [PARAMS]`."
-        );
-    }
+    let id: Option<u32> = command.id.get();
+    let mut rides: Vec<RideList> = helpers::get::ride(conn, command)?;
 
-    let id: i32 = if let Some(real_id) = command.real_id.get() {
-        real_id as i32
-    } else {
-        let dyn_id: usize = command.id.unwrap() as usize;
-        let rides: Vec<RideList> = helpers::get::ride(conn, command)?;
-
-        let id: i32 = rides.get(dyn_id - 1).cloned().unwrap_or_else(|| {
+    let mut ride: RideList = match (rides.len(), id) {
+        (0, _) => {
             err_exit!("Ride for your request was not found.");
-        }).ride_id;
-        id
+        }
+        (1, None) => rides.pop().unwrap(),
+        (_, Some(dyn_id)) => rides.get(dyn_id as usize - 1).cloned().unwrap_or_else(|| {
+            err_exit!("Ride for your request was not found.");
+        }),
+        _ => {
+            err_exit!("Not enough params. Can't select 1 ride.");
+        }
     };
+
+    ride = helpers::editor::edit_ride(ride).expect("failed to edit lub");
 
     Ok(())
 }

@@ -1,10 +1,10 @@
 use chrono::NaiveDate;
 use rusqlite::{Result, Row};
-use std::fmt;
+// use std::fmt;
 use tabled::Tabled;
 
-#[derive(Debug, Clone)]
-pub struct Opt<T>(pub Option<T>);
+// #[derive(Debug, Clone)]
+// pub struct Opt<T>(pub Option<T>);
 
 #[derive(Debug, Clone, Tabled)]
 pub struct Category {
@@ -85,7 +85,7 @@ pub struct ChainLubrication {
     pub id: i32,
     pub bike_id: i32,
     pub datestamp: NaiveDate,
-    pub annotation: Opt<String>,
+    pub annotation: String,
 }
 
 #[derive(Debug, Clone, Tabled)]
@@ -93,8 +93,8 @@ pub struct ChainLubricationList {
     pub id: i32,
     pub lub_id: i32,
     pub bike: String,
-    pub datestamp: NaiveDate,
-    pub annotation: Opt<String>,
+    pub date: NaiveDate,
+    pub annotation: String,
 }
 
 #[derive(Debug, Clone, Tabled)]
@@ -125,23 +125,23 @@ pub struct BuyToCategory {
     pub category_id: i32,
 }
 
-impl<T: fmt::Display> fmt::Display for Opt<T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match &self.0 {
-            Some(v) => write!(f, "{}", &v),
-            None => write!(f, "—"), // тут можна поставити "" або будь-що
-        }
-    }
-}
-
-impl<T> Opt<T> {
-    pub fn unwrap(&self) -> T
-    where
-        T: Clone,
-    {
-        self.0.clone().unwrap()
-    }
-}
+// impl<T: fmt::Display> fmt::Display for Opt<T> {
+//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//         match &self.0 {
+//             Some(v) => write!(f, "{}", &v),
+//             None => write!(f, "—"), // тут можна поставити "" або будь-що
+//         }
+//     }
+// }
+//
+// impl<T> Opt<T> {
+//     pub fn unwrap(&self) -> T
+//     where
+//         T: Clone,
+//     {
+//         self.0.clone().unwrap()
+//     }
+// }
 
 impl Category {
     pub fn from_row(row: &Row) -> Result<Self> {
@@ -247,7 +247,7 @@ impl ChainLubrication {
             id: row.get("id")?,
             bike_id: row.get("bike_id")?,
             datestamp: row.get("datestamp")?,
-            annotation: Opt(row.get::<_, Option<String>>("annotation")?),
+            annotation: row.get("annotation")?,
         })
     }
 }
@@ -258,8 +258,8 @@ impl ChainLubricationList {
             id: row.get(0)?,
             lub_id: row.get(1)?,
             bike: row.get(4)?,
-            datestamp: row.get(2)?,
-            annotation: Opt(row.get::<_, Option<String>>(3)?),
+            date: row.get(2)?,
+            annotation: row.get(3)?,
         })
     }
 }
