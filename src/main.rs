@@ -21,13 +21,13 @@ fn main() {
         let result = match funk.as_str() {
             "add" => handlers::add::route(conn, command),
             "del" => handlers::delete::route(conn, command),
-            "edit" => handlers::edite::route(conn, command),
+            "edit" => handlers::edit::route(conn, command),
             "list" => handlers::list::route(conn, command),
             "mod" => {
                 if command.real_id.is_some() || command.object.unwrap() == "tag" {
                     handlers::update::rote(conn, command)
                 } else {
-                    handlers::edite::route(conn, command)
+                    handlers::edit::route(conn, command)
                 }
             }
             _ => Ok(()),
