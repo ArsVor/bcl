@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use chrono::NaiveDate;
-use rusqlite::{Connection, OptionalExtension, Result, Transaction, params};
+use rusqlite::{Connection, Error, OptionalExtension, Result, Transaction, params};
 
 use crate::{cli::structs::Command, err_exit};
 
@@ -41,8 +41,13 @@ pub fn get_category(conn: &Connection, abbr: &str) -> Result<Category> {
     conn.query_row(
         "SELECT * FROM category WHERE abbr = ?1",
         params![abbr],
-        |row| Ok(Category::from_row(row)),
-    )?
+        Category::from_row,
+    ).map_err(|e| match e {
+        rusqlite::Error::QueryReturnedNoRows => {
+            err_exit!(format!("category - '{}' does not exist.", &abbr));
+        }
+        _ => e,
+    })
 }
 
 pub fn get_bike(conn: &Connection, abbr: &str, bike_id: u8) -> Result<Bike> {
