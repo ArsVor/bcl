@@ -52,8 +52,8 @@ pub struct Bike {
 pub struct BikeList {
     pub id: i32,
     pub bike_id: i32,
-    pub category: String,
-    pub bike: String,
+    pub code: String,
+    pub name: String,
     pub added: NaiveDate,
 }
 
@@ -205,8 +205,8 @@ impl BikeList {
         Ok(Self {
             id: row.get("row_num")?,
             bike_id: row.get("id")?,
-            category: row.get("abbr")?,
-            bike: row.get("name")?,
+            code: row.get("code")?,
+            name: row.get("name")?,
             added: row.get("datestamp")?,
         })
     }

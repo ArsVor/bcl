@@ -113,9 +113,9 @@ pub mod get {
     pub fn bike(conn: &Connection, command: Command) -> Result<Vec<BikeList>> {
         let mut select_sql: String = "
             SELECT 
-                ROW_NUMBER() OVER (ORDER BY b.id) AS row_num,
+                ROW_NUMBER() OVER (ORDER BY c.id) AS row_num,
                 b.id, 
-                c.abbr, 
+                concat(c.abbr, ':', b.id_in_cat) AS code, 
                 b.name, 
                 b.datestamp  
             FROM bike b 
@@ -151,7 +151,7 @@ pub mod get {
             select_sql.push_str(&where_sql.join(" AND "));
         }
 
-        select_sql.push_str("GROUP BY b.id ORDER BY b.id_in_cat");
+        select_sql.push_str("GROUP BY b.id ORDER BY c.id");
         if command.lim > 0 {
             select_sql.push_str(&format!(" LIMIT {}", &command.lim));
         }
@@ -513,8 +513,8 @@ pub mod editor {
         // 2. Пишемо дані bike у файл у зручному для редагування форматі
         writeln!(tmp, "id: {}", bike.id)?;
         writeln!(tmp, "bike_id: {}", bike.bike_id)?;
-        writeln!(tmp, "category: {}", bike.category)?;
-        writeln!(tmp, "name: {}", bike.bike)?;
+        writeln!(tmp, "code: {}", bike.code)?;
+        writeln!(tmp, "name: {}", bike.name)?;
         writeln!(tmp, "date: {}", bike.added)?;
 
         tmp.flush()?;
@@ -537,8 +537,8 @@ pub mod editor {
             let key = parts.next().unwrap_or("");
             let val = parts.next().unwrap_or("");
             match key {
-                "category" => bike.category = val.to_string(),
-                "name" => bike.bike = val.to_string(),
+                "code" => bike.code = val.to_string(),
+                "name" => bike.name = val.to_string(),
                 "date" => bike.added = val.parse().unwrap_or(bike.added),
                 _ => {}
             }

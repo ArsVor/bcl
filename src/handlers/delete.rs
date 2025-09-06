@@ -22,18 +22,21 @@ pub fn route(mut conn: Connection, command: Command) -> Result<()> {
 }
 
 fn bike(conn: &Connection, command: Command) -> Result<()> {
-    if command.id.is_none() && command.real_id.is_none() {
+    if command.id.is_none() && command.real_id.is_none() && command.bike_id.is_none() {
         err_exit!("Command params missed.\nExpected: `bcl del bike id:[stat_id]/[dyn_id] {OPT}`.");
     }
 
     let id: i32 = if let Some(real_id) = command.real_id.get() {
         real_id as i32
     } else {
-        let dyn_id = command.id.unwrap() as usize;
-        let bikes: Vec<BikeList> = helpers::get::bike(conn, command)?;
-        let bike: BikeList = bikes.get(dyn_id - 1).cloned().unwrap_or_else(|| {
-            err_exit!("Bike for your request was not found.");
-        });
+        let mut bikes: Vec<BikeList> = helpers::get::bike(conn, command.clone())?;
+        let bike: BikeList = if let Some(dyn_id) = command.id.get() {
+            bikes.get(dyn_id as usize - 1).cloned().unwrap_or_else(|| {
+                err_exit!("Bike for your request was not found.");
+            })
+        } else {
+            bikes.pop().unwrap()
+        };
         bike.bike_id
     };
 
