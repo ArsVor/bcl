@@ -1,9 +1,11 @@
+use std::collections::HashSet;
+
 use owo_colors::OwoColorize;
 use rusqlite::{Connection, Result, ToSql, params, params_from_iter};
 
 use crate::cli::structs::Command;
 use crate::db::models::{BikeList, BuyList, Category, ChainLubricationList, RideList};
-use crate::db::queries::get_category;
+use crate::db::queries::{get_bike, get_category, tag_del_if_unused, tag_get_or_create};
 use crate::err_exit;
 
 use super::helpers;
@@ -150,11 +152,13 @@ fn chain_lub(conn: &Connection, command: Command) -> Result<()> {
 
     Ok(())
 }
+
 fn ride(conn: &mut Connection, command: Command) -> Result<()> {
     let id: Option<u32> = command.id.get();
     let mut rides: Vec<RideList> = helpers::get::ride(conn, command)?;
+    let mut deleted_tags: Vec<String> = Vec::new();
 
-    let mut ride: RideList = match (rides.len(), id) {
+    let ride_def: RideList = match (rides.len(), id) {
         (0, _) => {
             err_exit!("Ride for your request was not found.");
         }
@@ -167,7 +171,105 @@ fn ride(conn: &mut Connection, command: Command) -> Result<()> {
         }
     };
 
-    ride = helpers::editor::edit_ride(ride).expect("failed to edit lub");
+    let ride: RideList = helpers::editor::edit_ride(ride_def.clone()).expect("failed to edit ride");
+
+    let annotation: String = if !ride.annotation.is_empty() {
+        format!("\"{}\"" , &ride.annotation)
+    } else {
+        String::new()
+    };
+
+    let tags_str: String = ride
+        .tags
+        .split(", ")
+        .map(|s| {
+            let mut t = String::from(s);
+            t.insert(0, '+');
+            t
+        })
+        .collect::<Vec<String>>().join(", ");
+
+    let mut sql: String = "
+        UPDATE ride
+        SET
+            datestamp = ?1,
+            distance = ?2,
+            annotation = ?3
+        ".to_string();
+    let mut dyn_params: Vec<Box<dyn ToSql>> = vec![Box::new(ride.date), Box::new(ride.distance), Box::new(&ride.annotation)];
+
+    if ride.bike != ride_def.bike {
+        let bike_code: Vec<String> = ride.bike.clone().split(":").map(|s| s.to_string()).collect();
+        let abbr: &str = bike_code[0].as_str();
+        let id_in_cat: u8 = bike_code[1].parse().unwrap_or_else(|_| {
+            err_exit!(format!("Incorrect bike code format. \nExpected `[abbr]:[int]`, but given - {}", &ride.bike));
+        });
+        let bike_id: i32 = get_bike(conn, abbr, id_in_cat)?.id; 
+
+        sql.push_str(format!(", bike_id = ?{}", dyn_params.len() + 1).as_str());
+        dyn_params.push(Box::new(bike_id));
+    }
+
+    sql.push_str(format!(" WHERE id = ?{}", dyn_params.len() + 1).as_str());
+    dyn_params.push(Box::new(ride.ride_id));
+
+    conn.execute(&sql, params_from_iter(dyn_params.iter().map(|b| b.as_ref())))?;
+
+    if ride.tags != ride_def.tags {
+        let tags_to_add: HashSet<String> = helpers::tags_diff(&ride.tags, &ride_def.tags); 
+        let tags_to_del: HashSet<String> = helpers::tags_diff(&ride_def.tags, &ride.tags);
+
+        if !tags_to_add.is_empty() {
+            for tag_name in tags_to_add {
+                let tag_id = tag_get_or_create(conn, tag_name.as_str())?;
+                conn.execute(
+                    "INSERT INTO tag_to_ride (tag_id, ride_id) VALUES (?1, ?2)",
+                    params![tag_id, ride.ride_id],
+                )?;
+            }
+        }
+
+        if !tags_to_del.is_empty() {
+            for tag_name in tags_to_del {
+                if let Ok(tag_id) = conn.query_row(
+                    "SELECT id FROM tag WHERE name = ?1",
+                    params![tag_name],
+                    |row| row.get::<_, i32>(0),
+                ) {
+                    conn.execute(
+                        "DELETE FROM tag_to_ride WHERE tag_id = ?1 AND ride_id = ?2",
+                        params![tag_id, ride.ride_id],
+                    )?;
+                }
+                if let Some(tag_name) = tag_del_if_unused(conn, tag_name.as_str())? {
+                    deleted_tags.push(tag_name);
+                }
+            }
+        }
+    }
+
+
+
+    println!(
+        "{}",
+        format!(
+            "Ride id:\"{0}\" modified to {1} {2} {3} {4} {5}",
+            ride.ride_id,
+            ride.bike,
+            ride.date,
+            ride.distance,
+            &tags_str,
+            &annotation,
+        )
+        .blue()
+    );
+    if !deleted_tags.is_empty() {
+        println!(
+            "{}",
+            format!("Deleted tags: {}", deleted_tags.join(", "),).blue()
+        );
+    }
+
 
     Ok(())
 }

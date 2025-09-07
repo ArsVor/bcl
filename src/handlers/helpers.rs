@@ -38,6 +38,12 @@ pub fn get_date(date_parts: Date) -> Option<NaiveDate> {
     }
 }
 
+pub fn tags_diff(s1: &str, s2: &str) -> HashSet<String> {
+    let set1: HashSet<String> = s1.split(", ").map(|s| s.to_string()).collect();
+    let set2: HashSet<String> = s2.split(", ").map(|s| s.to_string()).collect();
+    set1.difference(&set2).map(|s| s.to_string()).collect()
+}
+
 pub mod get {
     use super::*;
 
