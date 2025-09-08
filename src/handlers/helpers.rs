@@ -615,8 +615,12 @@ pub mod editor {
             let key = parts.next().unwrap_or("");
             let val = parts.next().unwrap_or("");
             match key {
-                "abbr" => category.abbr = val.to_string(),
-                "name" => category.name = val.to_string(),
+                "abbr" => if !val.is_empty() {
+                   category.abbr =  val.to_string()
+                },
+                "name" => if !val.is_empty() {
+                    category.name = val.to_string()
+                },
                 _ => {}
             }
         }

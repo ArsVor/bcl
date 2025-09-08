@@ -128,6 +128,27 @@ fn category(conn: &Connection, command: Command) -> Result<()> {
 
     category = helpers::editor::edit_cat(category).expect("failed to edit cat");
 
+    conn.execute(
+        "UPDATE category
+        SET
+            abbr = ?1,
+            name = ?2
+        WHERE id = ?3
+        ", 
+        params![category.abbr, category.name, category.id],
+    )?;
+
+    println!(
+        "{}",
+        format!(
+            "Category - \"id:{}\" modified to {}: \"{}\"",
+            &category.id,
+            &category.abbr,
+            &category.name,
+        )
+        .blue()
+    );
+
     Ok(())
 }
 
@@ -148,7 +169,8 @@ fn chain_lub(conn: &Connection, command: Command) -> Result<()> {
         }
     };
 
-    let lub: ChainLubricationList = helpers::editor::edit_lub(lub_def.clone()).expect("failed to edit lub");
+    let lub: ChainLubricationList =
+        helpers::editor::edit_lub(lub_def.clone()).expect("failed to edit lub");
 
     let annotation: String = if !lub.annotation.is_empty() {
         format!("\"{}\"", &lub.annotation)
@@ -166,12 +188,7 @@ fn chain_lub(conn: &Connection, command: Command) -> Result<()> {
     let mut dyn_params: Vec<Box<dyn ToSql>> = vec![Box::new(lub.date), Box::new(lub.annotation)];
 
     if lub.bike != lub_def.bike {
-        let bike_code: Vec<String> = lub
-            .bike
-            .clone()
-            .split(":")
-            .map(|s| s.to_string())
-            .collect();
+        let bike_code: Vec<String> = lub.bike.clone().split(":").map(|s| s.to_string()).collect();
         let abbr: &str = bike_code[0].as_str();
         let id_in_cat: u8 = bike_code[1].parse().unwrap_or_else(|_| {
             err_exit!(format!(
@@ -188,10 +205,13 @@ fn chain_lub(conn: &Connection, command: Command) -> Result<()> {
     sql.push_str(format!(" WHERE id = ?{}", dyn_params.len() + 1).as_str());
     dyn_params.push(Box::new(lub.lub_id));
 
-    conn.execute(&sql, params_from_iter(dyn_params.iter().map(|b| b.as_ref())))?;
+    conn.execute(
+        &sql,
+        params_from_iter(dyn_params.iter().map(|b| b.as_ref())),
+    )?;
 
     println!(
-        "{}", 
+        "{}",
         format!(
             "Chain Lubrication - id:\"{0}\" modified to {1} {2} {3}",
             lub.lub_id, lub.bike, lub.date, &annotation,
