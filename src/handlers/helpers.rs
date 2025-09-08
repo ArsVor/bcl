@@ -543,8 +543,8 @@ pub mod editor {
             let key = parts.next().unwrap_or("");
             let val = parts.next().unwrap_or("");
             match key {
-                "code" => bike.code = val.to_string(),
-                "name" => bike.name = val.to_string(),
+                "code" => bike.code = val.trim_ascii().to_string(),
+                "name" => bike.name = val.trim_ascii().to_string(),
                 "date" => bike.added = val.parse().unwrap_or(bike.added),
                 _ => {}
             }
@@ -580,9 +580,9 @@ pub mod editor {
             let key = parts.next().unwrap_or("");
             let val = parts.next().unwrap_or("");
             match key {
-                "target" => buy.target = val.to_string(),
-                "tags" => buy.tags = val.to_string(),
-                "name" => buy.name = val.to_string(),
+                "target" => buy.target = val.trim_ascii().to_string(),
+                "tags" => buy.tags = val.trim_ascii().to_string(),
+                "name" => buy.name = val.trim_ascii().to_string(),
                 "price" => buy.price = val.parse().unwrap_or(buy.price),
                 "date" => buy.date = val.parse().unwrap_or(buy.date),
                 _ => {}
@@ -615,12 +615,16 @@ pub mod editor {
             let key = parts.next().unwrap_or("");
             let val = parts.next().unwrap_or("");
             match key {
-                "abbr" => if !val.is_empty() {
-                   category.abbr =  val.to_string()
-                },
-                "name" => if !val.is_empty() {
-                    category.name = val.to_string()
-                },
+                "abbr" => {
+                    if !val.trim_ascii().is_empty() {
+                        category.abbr = val.trim_ascii().to_string()
+                    }
+                }
+                "name" => {
+                    if !val.trim_ascii().is_empty() {
+                        category.name = val.trim_ascii().to_string()
+                    }
+                }
                 _ => {}
             }
         }
@@ -652,9 +656,9 @@ pub mod editor {
             let key = parts.next().unwrap_or("");
             let val = parts.next().unwrap_or("");
             match key {
-                "bike" => lub.bike = val.to_string(),
+                "bike" => lub.bike = val.trim_ascii().to_string(),
                 "date" => lub.date = val.parse().unwrap_or(lub.date),
-                "annotation" => lub.annotation = val.to_string(),
+                "annotation" => lub.annotation = val.trim_ascii().to_string(),
                 _ => {}
             }
         }
@@ -689,11 +693,11 @@ pub mod editor {
             let key = parts.next().unwrap_or("");
             let val = parts.next().unwrap_or("");
             match key {
-                "bike" => ride.bike = val.to_string(),
+                "bike" => ride.bike = val.trim_ascii().to_string(),
                 "date" => ride.date = val.parse().unwrap_or(ride.date),
                 "distance" => ride.distance = val.parse().unwrap_or(ride.distance),
-                "tags" => ride.tags = val.to_string(),
-                "annotation" => ride.annotation = val.to_string(),
+                "tags" => ride.tags = val.trim_ascii().to_string(),
+                "annotation" => ride.annotation = val.trim_ascii().to_string(),
                 _ => {}
             }
         }

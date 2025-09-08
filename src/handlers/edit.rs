@@ -103,8 +103,12 @@ fn bike(conn: &Connection, command: Command) -> Result<()> {
 fn buy(conn: &mut Connection, command: Command) -> Result<()> {
     let id: Option<u32> = command.id.get();
     let mut buys: Vec<BuyList> = helpers::get::buy(conn, command)?;
+    let mut category_id: Option<i32> = None;
+    let mut bike_id: Option<i32> = None;
+    let mut is_changed: bool = false;
+    let mut deleted_tags: Vec<String> = Vec::new();
 
-    let mut buy: BuyList = match (buys.len(), id) {
+    let buy_def: BuyList = match (buys.len(), id) {
         (0, _) => {
             err_exit!("Buy for your request was not found.");
         }
@@ -117,8 +121,165 @@ fn buy(conn: &mut Connection, command: Command) -> Result<()> {
         }
     };
 
-    buy = helpers::editor::edit_buy(buy).expect("failed to edit buy");
-    // println!("Now date: {}; name: {}", &buy.date, &buy.name);
+    let buy: BuyList = helpers::editor::edit_buy(buy_def.clone()).expect("failed to edit buy");
+
+    let tags_str: String = buy
+        .tags
+        .split(", ")
+        .map(|s| {
+            let mut t = String::from(s);
+            t.insert(0, '+');
+            t
+        })
+        .collect::<Vec<String>>()
+        .join(", ");
+
+    if buy.target != buy_def.target {
+        is_changed = true;
+        let target_code: Vec<String> = buy
+            .target
+            .clone()
+            .split(":")
+            .map(|s| s.to_string())
+            .collect();
+
+        if target_code.len() > 2 || (target_code.len() == 2 && target_code[0].is_empty()) {
+            err_exit!(format!(
+                "Incorrect target code format. \nExpected `[abbr]:[int]`, but given - {}",
+                &buy.target
+            ));
+        }
+
+        let abbr: &str = target_code[0].as_str();
+
+        if !target_code[0].is_empty() {
+            category_id = Some(get_category(conn, abbr)?.id)
+        };
+
+        if target_code.len() > 1 && !target_code[1].is_empty() {
+            let id: u8 = target_code[1].parse().unwrap_or_else(|_| {
+                err_exit!(format!(
+                    "Incorrect target code format. \nExpected `[abbr]:[int]`, but given - {}",
+                    &buy.target
+                ));
+            });
+            bike_id = Some(get_bike(conn, abbr, id)?.id);
+        };
+    }
+
+    let tx = conn.transaction()?;
+
+    if is_changed {
+        if let Some(b_id) = bike_id {
+            if let Ok(btb_id) = tx.query_row(
+                "SELECT id FROM buy_to_bike WHERE buy_id = ?1",
+                params![buy.buy_id],
+                |row| row.get::<_, i32>(0),
+            ) {
+                tx.execute(
+                    "UPDATE buy_to_bike
+                    SET bike_id = ?1
+                    WHERE id = ?2",
+                    params![b_id, btb_id],
+                )?;
+            } else {
+                tx.execute(
+                    "INSERT INTO buy_to_bike (buy_id, bike_id) VALUES (?1, ?2)",
+                    params![buy.buy_id, b_id],
+                )?;
+            }
+        } else {
+            tx.execute(
+                "DELETE FROM buy_to_bike WHERE buy_id = ?1",
+                params![buy.buy_id],
+            )?;
+        };
+
+        if let Some(c_id) = category_id {
+            if let Ok(btc_id) = tx.query_row(
+                "SELECT id FROM buy_to_category WHERE buy_id = ?1",
+                params![buy.buy_id],
+                |row| row.get::<_, i32>(0),
+            ) {
+                tx.execute(
+                    "UPDATE buy_to_category
+                    SET category_id = ?1
+                    WHERE id = ?2",
+                    params![c_id, btc_id],
+                )?;
+            } else {
+                tx.execute(
+                    "INSERT INTO buy_to_category (buy_id, category_id) VALUES (?1, ?2)",
+                    params![buy.buy_id, c_id],
+                )?;
+            }
+        } else {
+            tx.execute(
+                "DELETE FROM buy_to_category WHERE buy_id = ?1",
+                params![buy.buy_id],
+            )?;
+        }
+    }
+
+    tx.execute(
+        "UPDATE buy
+        SET
+            name = ?1,
+            price = ?2,
+            datestamp = ?3
+        WHERE id = ?4",
+        params![buy.name, buy.price, buy.date, buy.buy_id],
+    )?;
+
+    tx.commit()?;
+
+    if buy.tags != buy_def.tags {
+        let tags_to_add: HashSet<String> = helpers::tags_diff(&buy.tags, &buy_def.tags);
+        let tags_to_del: HashSet<String> = helpers::tags_diff(&buy_def.tags, &buy.tags);
+
+        if !tags_to_add.is_empty() {
+            for tag_name in tags_to_add {
+                let tag_id = tag_get_or_create(conn, tag_name.as_str())?;
+                conn.execute(
+                    "INSERT INTO tag_to_buy (tag_id, buy_id) VALUES (?1, ?2)",
+                    params![tag_id, buy.buy_id],
+                )?;
+            }
+        }
+
+        if !tags_to_del.is_empty() {
+            for tag_name in tags_to_del {
+                if let Ok(tag_id) = conn.query_row(
+                    "SELECT id FROM tag WHERE name = ?1",
+                    params![tag_name],
+                    |row| row.get::<_, i32>(0),
+                ) {
+                    conn.execute(
+                        "DELETE FROM tag_to_buy WHERE tag_id = ?1 AND buy_id = ?2",
+                        params![tag_id, buy.buy_id],
+                    )?;
+                }
+                if let Some(tag_name) = tag_del_if_unused(conn, tag_name.as_str())? {
+                    deleted_tags.push(tag_name);
+                }
+            }
+        }
+    }
+
+    println!(
+        "{}",
+        format!(
+            "Buy - id:\"{0}\" modified to {1} {2} \"{3}\" {4} {5}",
+            buy.buy_id, buy.target, &tags_str, buy.name, buy.price, buy.date,
+        )
+        .blue()
+    );
+    if !deleted_tags.is_empty() {
+        println!(
+            "{}",
+            format!("Deleted tags: {}", deleted_tags.join(", "),).blue()
+        );
+    }
 
     Ok(())
 }
@@ -134,7 +295,7 @@ fn category(conn: &Connection, command: Command) -> Result<()> {
             abbr = ?1,
             name = ?2
         WHERE id = ?3
-        ", 
+        ",
         params![category.abbr, category.name, category.id],
     )?;
 
@@ -142,9 +303,7 @@ fn category(conn: &Connection, command: Command) -> Result<()> {
         "{}",
         format!(
             "Category - \"id:{}\" modified to {}: \"{}\"",
-            &category.id,
-            &category.abbr,
-            &category.name,
+            &category.id, &category.abbr, &category.name,
         )
         .blue()
     );
