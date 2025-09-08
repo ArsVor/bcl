@@ -135,7 +135,7 @@ fn chain_lub(conn: &Connection, command: Command) -> Result<()> {
     let id: Option<u32> = command.id.get();
     let mut lubs: Vec<ChainLubricationList> = helpers::get::chain_lub(conn, command)?;
 
-    let mut lub: ChainLubricationList = match (lubs.len(), id) {
+    let lub_def: ChainLubricationList = match (lubs.len(), id) {
         (0, _) => {
             err_exit!("Chain lubrication for your request was not found.");
         }
@@ -148,7 +148,56 @@ fn chain_lub(conn: &Connection, command: Command) -> Result<()> {
         }
     };
 
-    lub = helpers::editor::edit_lub(lub).expect("failed to edit lub");
+    let lub: ChainLubricationList = helpers::editor::edit_lub(lub_def.clone()).expect("failed to edit lub");
+
+    let annotation: String = if !lub.annotation.is_empty() {
+        format!("\"{}\"", &lub.annotation)
+    } else {
+        String::new()
+    };
+
+    let mut sql: String = "
+        UPDATE chain_lubrication
+        SET
+            datestamp = ?1,
+            annotation = ?2
+    "
+    .to_string();
+    let mut dyn_params: Vec<Box<dyn ToSql>> = vec![Box::new(lub.date), Box::new(lub.annotation)];
+
+    if lub.bike != lub_def.bike {
+        let bike_code: Vec<String> = lub
+            .bike
+            .clone()
+            .split(":")
+            .map(|s| s.to_string())
+            .collect();
+        let abbr: &str = bike_code[0].as_str();
+        let id_in_cat: u8 = bike_code[1].parse().unwrap_or_else(|_| {
+            err_exit!(format!(
+                "Incorrect bike code format. \nExpected `[abbr]:[int]`, but given - {}",
+                &lub.bike
+            ));
+        });
+        let bike_id: i32 = get_bike(conn, abbr, id_in_cat)?.id;
+
+        sql.push_str(format!(", bike_id = ?{}", dyn_params.len() + 1).as_str());
+        dyn_params.push(Box::new(bike_id));
+    }
+
+    sql.push_str(format!(" WHERE id = ?{}", dyn_params.len() + 1).as_str());
+    dyn_params.push(Box::new(lub.lub_id));
+
+    conn.execute(&sql, params_from_iter(dyn_params.iter().map(|b| b.as_ref())))?;
+
+    println!(
+        "{}", 
+        format!(
+            "Chain Lubrication - id:\"{0}\" modified to {1} {2} {3}",
+            lub.lub_id, lub.bike, lub.date, &annotation,
+        )
+        .blue(),
+    );
 
     Ok(())
 }
@@ -174,7 +223,7 @@ fn ride(conn: &mut Connection, command: Command) -> Result<()> {
     let ride: RideList = helpers::editor::edit_ride(ride_def.clone()).expect("failed to edit ride");
 
     let annotation: String = if !ride.annotation.is_empty() {
-        format!("\"{}\"" , &ride.annotation)
+        format!("\"{}\"", &ride.annotation)
     } else {
         String::new()
     };
@@ -187,7 +236,8 @@ fn ride(conn: &mut Connection, command: Command) -> Result<()> {
             t.insert(0, '+');
             t
         })
-        .collect::<Vec<String>>().join(", ");
+        .collect::<Vec<String>>()
+        .join(", ");
 
     let mut sql: String = "
         UPDATE ride
@@ -195,16 +245,29 @@ fn ride(conn: &mut Connection, command: Command) -> Result<()> {
             datestamp = ?1,
             distance = ?2,
             annotation = ?3
-        ".to_string();
-    let mut dyn_params: Vec<Box<dyn ToSql>> = vec![Box::new(ride.date), Box::new(ride.distance), Box::new(&ride.annotation)];
+    "
+    .to_string();
+    let mut dyn_params: Vec<Box<dyn ToSql>> = vec![
+        Box::new(ride.date),
+        Box::new(ride.distance),
+        Box::new(&ride.annotation),
+    ];
 
     if ride.bike != ride_def.bike {
-        let bike_code: Vec<String> = ride.bike.clone().split(":").map(|s| s.to_string()).collect();
+        let bike_code: Vec<String> = ride
+            .bike
+            .clone()
+            .split(":")
+            .map(|s| s.to_string())
+            .collect();
         let abbr: &str = bike_code[0].as_str();
         let id_in_cat: u8 = bike_code[1].parse().unwrap_or_else(|_| {
-            err_exit!(format!("Incorrect bike code format. \nExpected `[abbr]:[int]`, but given - {}", &ride.bike));
+            err_exit!(format!(
+                "Incorrect bike code format. \nExpected `[abbr]:[int]`, but given - {}",
+                &ride.bike
+            ));
         });
-        let bike_id: i32 = get_bike(conn, abbr, id_in_cat)?.id; 
+        let bike_id: i32 = get_bike(conn, abbr, id_in_cat)?.id;
 
         sql.push_str(format!(", bike_id = ?{}", dyn_params.len() + 1).as_str());
         dyn_params.push(Box::new(bike_id));
@@ -213,10 +276,13 @@ fn ride(conn: &mut Connection, command: Command) -> Result<()> {
     sql.push_str(format!(" WHERE id = ?{}", dyn_params.len() + 1).as_str());
     dyn_params.push(Box::new(ride.ride_id));
 
-    conn.execute(&sql, params_from_iter(dyn_params.iter().map(|b| b.as_ref())))?;
+    conn.execute(
+        &sql,
+        params_from_iter(dyn_params.iter().map(|b| b.as_ref())),
+    )?;
 
     if ride.tags != ride_def.tags {
-        let tags_to_add: HashSet<String> = helpers::tags_diff(&ride.tags, &ride_def.tags); 
+        let tags_to_add: HashSet<String> = helpers::tags_diff(&ride.tags, &ride_def.tags);
         let tags_to_del: HashSet<String> = helpers::tags_diff(&ride_def.tags, &ride.tags);
 
         if !tags_to_add.is_empty() {
@@ -248,18 +314,11 @@ fn ride(conn: &mut Connection, command: Command) -> Result<()> {
         }
     }
 
-
-
     println!(
         "{}",
         format!(
-            "Ride id:\"{0}\" modified to {1} {2} {3} {4} {5}",
-            ride.ride_id,
-            ride.bike,
-            ride.date,
-            ride.distance,
-            &tags_str,
-            &annotation,
+            "Ride - id:\"{0}\" modified to {1} {2} {3} {4} {5}",
+            ride.ride_id, ride.bike, ride.date, ride.distance, &tags_str, &annotation,
         )
         .blue()
     );
@@ -269,7 +328,6 @@ fn ride(conn: &mut Connection, command: Command) -> Result<()> {
             format!("Deleted tags: {}", deleted_tags.join(", "),).blue()
         );
     }
-
 
     Ok(())
 }
