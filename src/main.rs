@@ -22,6 +22,7 @@ fn main() {
             "add" => handlers::add::route(conn, command),
             "del" => handlers::delete::route(conn, command),
             "edit" => handlers::edit::route(conn, command),
+            "info" => handlers::info::route(conn, command),
             "list" => handlers::list::route(conn, command),
             "mod" => {
                 if command.real_id.is_some() || command.object.unwrap() == "tag" {

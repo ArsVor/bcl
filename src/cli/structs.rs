@@ -306,7 +306,7 @@ impl Command {
 
         for arg in args.into_iter() {
             match arg.as_str() {
-                "add" | "del" | "mod" | "edit" | "list" | "graph" | "sync" => {
+                "add" | "del" | "mod" | "edit" | "list" | "info" | "graph" | "sync" => {
                     command
                         .funk
                         .set_or_err(Some(arg), "multiple command input.");

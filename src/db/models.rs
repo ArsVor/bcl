@@ -48,6 +48,23 @@ pub struct Bike {
     pub datestamp: NaiveDate,
 }
 
+#[derive(Debug)]
+pub struct BikeInfo {
+    pub name: String,
+    pub id: i32,
+    pub category: String,
+    pub code: String,
+    pub add_date: NaiveDate,
+    pub ride_count: u32,
+    pub total_distance: f32,
+    pub last_ride: Option<NaiveDate>,
+    pub last_distance: f32,
+    pub chain_lub: Option<NaiveDate>,
+    pub after_lub_distance: f32,
+    pub maintenance: Option<NaiveDate>,
+    pub total_spend: f32,
+}
+
 #[derive(Debug, Clone, Tabled)]
 pub struct BikeList {
     pub id: i32,
@@ -196,6 +213,26 @@ impl Bike {
             id_in_cat: row.get("id_in_cat")?,
             name: row.get("name")?,
             datestamp: row.get("datestamp")?,
+        })
+    }
+}
+
+impl BikeInfo {
+    pub fn from_row(row: &Row) -> Result<Self> {
+        Ok(Self {
+        name: row.get("bike_name")?,
+        id: row.get("bike_id")?,
+        category: row.get("category_name")?,
+        code: row.get("code")?,
+        add_date: row.get("add_date")?,
+        ride_count: row.get("ride_count")?,
+        total_distance: row.get("total_distance")?,
+        last_ride: row.get("last_ride")?,
+        last_distance: row.get("last_distance")?,
+        chain_lub: row.get("chain_lub")?,
+        after_lub_distance: row.get("after_lub_distance")?,
+        maintenance: row.get("maintenance")?,
+        total_spend: row.get("total_spend")?,
         })
     }
 }

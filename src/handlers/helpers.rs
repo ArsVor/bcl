@@ -45,6 +45,10 @@ pub fn tags_diff(s1: &str, s2: &str) -> HashSet<String> {
 }
 
 pub mod get {
+    use rusqlite::params;
+
+    use crate::db::models::BikeInfo;
+
     use super::*;
 
     pub fn categories(conn: &Connection) -> Result<Vec<Category>> {
@@ -171,6 +175,48 @@ pub mod get {
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(bikes)
+    }
+
+    pub fn bike_info(conn: &Connection, id: i32) -> Result<BikeInfo> {
+        let bike_info: BikeInfo = conn.query_row(
+            "SELECT 
+                b.name AS bike_name,
+                b.id AS bike_id,
+                c.name AS category_name,
+                concat(c.abbr, ':', b.id_in_cat) AS code,
+                b.datestamp AS add_date,
+                COUNT(r.id) AS ride_count,
+                COALESCE(SUM(r.distance), 0.0) AS total_distance,
+                (SELECT MAX(r2.datestamp) FROM ride r2 WHERE r2.bike_id = b.id) AS last_ride,
+                COALESCE((SELECT r2.distance FROM ride r2 WHERE r2.bike_id = b.id ORDER BY r2.datestamp DESC LIMIT 1), 0.0) AS last_distance,
+                (SELECT MAX(l.datestamp) FROM chain_lubrication l WHERE l.bike_id = b.id) AS chain_lub,
+                COALESCE((SELECT SUM(r2.distance) 
+                    FROM ride r2 
+                    WHERE r2.bike_id = b.id 
+                        AND r2.datestamp >= (SELECT MAX(l.datestamp) 
+                                        FROM chain_lubrication l 
+                                        WHERE l.bike_id = b.id)), 0.0) AS after_lub_distance,
+                (SELECT by.datestamp 
+                    FROM buy_to_bike btb
+                    JOIN buy by ON by.id = btb.buy_id
+                    JOIN tag_to_buy ttb ON ttb.buy_id = by.id
+                    JOIN tag t ON t.id = ttb.tag_id
+                    WHERE btb.bike_id = b.id AND t.name = 'mnt'
+                    ORDER BY by.datestamp DESC
+                    LIMIT 1) AS maintenance,
+                COALESCE((SELECT SUM(by.price) 
+                    FROM buy_to_bike btb 
+                    JOIN buy by ON by.id = btb.buy_id 
+                    WHERE btb.bike_id = b.id), 0.0) AS total_spend
+            FROM bike b
+            JOIN category c ON c.id = b.category_id
+            LEFT JOIN ride r ON r.bike_id = b.id
+            WHERE b.id = ?1
+            GROUP BY b.id",
+            params![id],
+            BikeInfo::from_row,
+        )?;
+        Ok(bike_info)
     }
 
     pub fn buy(conn: &Connection, command: Command) -> Result<Vec<BuyList>> {
