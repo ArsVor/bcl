@@ -13,6 +13,17 @@ pub struct Category {
     pub name: String,
 }
 
+#[derive(Debug, Clone)]
+pub struct CategoryInfo {
+    pub id: i32,
+    pub abbr: String,
+    pub name: String,
+    pub bike_count: u16,
+    pub total_spend: f32,
+    pub ride_count: u16,
+    pub total_distance: f32,
+}
+
 #[derive(Debug, Clone, Tabled)]
 pub struct Tag {
     pub id: i32,
@@ -48,7 +59,7 @@ pub struct Bike {
     pub datestamp: NaiveDate,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BikeInfo {
     pub name: String,
     pub id: i32,
@@ -170,6 +181,20 @@ impl Category {
     }
 }
 
+impl CategoryInfo {
+    pub fn from_row(row: &Row) -> Result<Self> {
+        Ok(Self {
+            id: row.get("cat_id")?,
+            abbr: row.get("cat_abbr")?,
+            name: row.get("cat_name")?,
+            bike_count: row.get("bike_count")?,
+            total_spend: row.get("total_spend")?,
+            ride_count: row.get("ride_count")?,
+            total_distance: row.get("total_distance")?,
+        })
+    }
+}
+
 impl Tag {
     pub fn from_row(row: &Row) -> Result<Self> {
         Ok(Self {
@@ -220,19 +245,19 @@ impl Bike {
 impl BikeInfo {
     pub fn from_row(row: &Row) -> Result<Self> {
         Ok(Self {
-        name: row.get("bike_name")?,
-        id: row.get("bike_id")?,
-        category: row.get("category_name")?,
-        code: row.get("code")?,
-        add_date: row.get("add_date")?,
-        ride_count: row.get("ride_count")?,
-        total_distance: row.get("total_distance")?,
-        last_ride: row.get("last_ride")?,
-        last_distance: row.get("last_distance")?,
-        chain_lub: row.get("chain_lub")?,
-        after_lub_distance: row.get("after_lub_distance")?,
-        maintenance: row.get("maintenance")?,
-        total_spend: row.get("total_spend")?,
+            name: row.get("bike_name")?,
+            id: row.get("bike_id")?,
+            category: row.get("category_name")?,
+            code: row.get("code")?,
+            add_date: row.get("add_date")?,
+            ride_count: row.get("ride_count")?,
+            total_distance: row.get("total_distance")?,
+            last_ride: row.get("last_ride")?,
+            last_distance: row.get("last_distance")?,
+            chain_lub: row.get("chain_lub")?,
+            after_lub_distance: row.get("after_lub_distance")?,
+            maintenance: row.get("maintenance")?,
+            total_spend: row.get("total_spend")?,
         })
     }
 }

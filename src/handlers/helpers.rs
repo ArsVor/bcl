@@ -47,7 +47,7 @@ pub fn tags_diff(s1: &str, s2: &str) -> HashSet<String> {
 pub mod get {
     use rusqlite::params;
 
-    use crate::db::models::BikeInfo;
+    use crate::db::models::{BikeInfo, CategoryInfo};
 
     use super::*;
 
@@ -105,6 +105,29 @@ pub mod get {
         } else {
             err_exit!("bike category for your request was not found.");
         }
+    }
+
+    pub fn category_info(conn: &Connection, id: i32) -> Result<CategoryInfo> {
+    let info: CategoryInfo = conn.query_row(
+        "SELECT
+            c.id AS cat_id,
+            c.abbr AS cat_abbr,
+            c.name AS cat_name,
+            COUNT(DISTINCT bk.id) AS bike_count,
+            COALESCE(SUM(b.price), 0.00) AS total_spend,
+            COUNT(DISTINCT r.id) AS ride_count,
+            COALESCE(SUM(r.distance), 0.00) AS total_distance
+        FROM category c
+        LEFT JOIN bike bk ON bk.category_id = c.id
+        LEFT JOIN buy_to_category btc ON btc.category_id = c.id
+        LEFT JOIN buy b ON b.id = btc.buy_id
+        LEFT JOIN ride r ON r.bike_id = bk.id
+        WHERE c.id = ?1
+        GROUP BY c.id, c.abbr, c.name",
+        params![id], 
+        CategoryInfo::from_row
+        )?;
+        Ok(info)
     }
 
     pub fn tag(conn: &Connection) -> Result<Vec<String>> {

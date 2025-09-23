@@ -2,9 +2,10 @@ use owo_colors::OwoColorize;
 use rusqlite::{Connection, Result, params};
 
 use crate::cli::structs::Command;
-use crate::db::models::{BikeInfo, BikeList};
+use crate::db::models::{BikeInfo, BikeList, Category, CategoryInfo};
 use crate::db::queries;
 use crate::err_exit;
+use crate::output::{self, info};
 
 use super::helpers;
 
@@ -13,6 +14,7 @@ pub fn route(conn: Connection, command: Command) -> Result<()> {
 
     match obj.as_str() {
         "bike" => bike(&conn, command),
+        "cat" => category(&conn, command),
         _ => Ok(()),
     }
 }
@@ -46,56 +48,15 @@ fn bike(conn: &Connection, command: Command) -> Result<()> {
 
     let bike: BikeInfo = helpers::get::bike_info(conn, bike_id)?;
 
-    let after_lub_distance: f32 = bike.after_lub_distance;
-    let msg: String = format!(
-        "Without chain lubrication, passed: {}km",
-        &after_lub_distance
-    );
+    info::ride_info(bike);
 
-    println!("{}", format!("\n~~ {} ~~", &bike.name).green());
-    println!(
-        "{}",
-        format!("Category:         {}", &bike.category).green()
-    );
-    println!("{}", format!("ID:               {}", &bike.id).green());
-    println!("{}", format!("Bike code:        {}", &bike.code).green());
-    println!(
-        "{}",
-        format!("Added:            {}", &bike.add_date).green()
-    );
-    println!(
-        "{}",
-        format!("Total spend:      {}", &bike.total_spend).green()
-    );
-    println!(
-        "{}",
-        format!("Ride count:       {}", &bike.ride_count).green()
-    );
-    if let Some(date) = bike.last_ride {
-        println!(
-            "{}",
-            format!("Total distance:   {}km", &bike.total_distance).green()
-        );
-        println!("{}", format!("Last ride:        {}", &date).green());
-        println!(
-            "{}",
-            format!("    distance:     {}km", &bike.last_distance).green()
-        );
-    }
-    if let Some(date) = bike.maintenance {
-        println!("{}", format!("Last maintenance: {}", &date).green());
-    }
-    if let Some(date) = bike.chain_lub {
-        println!("{}", format!("Last chain lub:   {}", &date).green());
-    }
-    if after_lub_distance > 0.00 {
-        if after_lub_distance > 200.00 {
-            println!("{}", msg.red());
-        } else if after_lub_distance > 150.00 {
-            println!("{}", msg.yellow());
-        } else {
-            println!("{}", msg.green());
-        }
-    };
+    Ok(())
+}
+
+fn category(conn: &Connection, command: Command) -> Result<()> {
+    let category: Category = helpers::get::category_with_params(conn, command)?;
+    let cat_info: CategoryInfo = helpers::get::category_info(conn, category.id)?;
+    output::info::category_info(cat_info);
+
     Ok(())
 }

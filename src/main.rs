@@ -2,6 +2,7 @@ pub mod cli;
 pub mod db;
 pub mod handlers;
 mod makros;
+pub mod output;
 
 use std::env::args;
 
