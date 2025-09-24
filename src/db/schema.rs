@@ -86,6 +86,7 @@ fn create_chain_lubrication_table(conn: &Connection) -> Result<()> {
             id          INTEGER PRIMARY KEY,
             bike_id     INTEGER NOT NULL,
             datestamp   NUMERIC NOT NULL,
+            distance    REAL NOT NULL,
             annotation  TEXT,
             FOREIGN KEY(bike_id) REFERENCES bike(id) ON DELETE RESTRICT
         )",

@@ -341,10 +341,15 @@ fn chain_lub(conn: &Connection, command: Command) -> Result<()> {
         UPDATE chain_lubrication
         SET
             datestamp = ?1,
-            annotation = ?2
+            distance = ?2,
+            annotation = ?3
     "
     .to_string();
-    let mut dyn_params: Vec<Box<dyn ToSql>> = vec![Box::new(lub.date), Box::new(lub.annotation)];
+    let mut dyn_params: Vec<Box<dyn ToSql>> = vec![
+        Box::new(lub.date),
+        Box::new(lub.passed),
+        Box::new(lub.annotation),
+    ];
 
     if lub.bike != lub_def.bike {
         let bike_code: Vec<String> = lub.bike.clone().split(":").map(|s| s.to_string()).collect();
@@ -372,8 +377,8 @@ fn chain_lub(conn: &Connection, command: Command) -> Result<()> {
     println!(
         "{}",
         format!(
-            "Chain Lubrication - id:\"{0}\" modified to {1} {2} {3}",
-            lub.lub_id, lub.bike, lub.date, &annotation,
+            "Chain Lubrication - id:\"{0}\" modified to {1} {2} {3}km {4}",
+            lub.lub_id, lub.bike, lub.date, lub.passed, &annotation,
         )
         .blue(),
     );

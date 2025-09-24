@@ -1,6 +1,9 @@
 use owo_colors::OwoColorize;
 
-use crate::db::models::{BikeInfo, CategoryInfo};
+use crate::{
+    db::models::{BikeInfo, CategoryInfo, ChainLubricationList},
+    handlers::helpers::get::bike,
+};
 
 pub fn ride_info(bike: BikeInfo) {
     let after_lub_distance: f32 = bike.after_lub_distance;
@@ -60,8 +63,30 @@ pub fn category_info(info: CategoryInfo) {
     println!("{}", format!("\n~~ {} ~~", &info.name).green());
     println!("{}", format!("ID:             {}", &info.id).green());
     println!("{}", format!("Code:           {}", &info.abbr).green());
-    println!("{}", format!("Bike count:     {}", &info.bike_count).green());
-    println!("{}", format!("Total spend:    {} UAH", &info.total_spend).green());
-    println!("{}", format!("Ride count:     {}", &info.ride_count).green());
-    println!("{}", format!("Total distance: {} km", &info.total_distance).green());
+    println!(
+        "{}",
+        format!("Bike count:     {}", &info.bike_count).green()
+    );
+    println!(
+        "{}",
+        format!("Total spend:    {} UAH", &info.total_spend).green()
+    );
+    println!(
+        "{}",
+        format!("Ride count:     {}", &info.ride_count).green()
+    );
+    println!(
+        "{}",
+        format!("Total distance: {} km", &info.total_distance).green()
+    );
+}
+
+pub fn lub_info(lub: ChainLubricationList, bike_name: String) {
+    println!("{}", "\n~~ Chain lubrication ~~".green());
+    println!("{}", format!("ID:         {}", &lub.lub_id).green());
+    println!("{}", format!("Bike:       {}", &bike_name).green());
+    println!("{}", format!("Code:       {}", &lub.bike).green());
+    println!("{}", format!("Date:       {}", &lub.date).green());
+    println!("{}", format!("Passed:     {}", &lub.passed).green());
+    println!("{}", format!("Annotation: {}", &lub.annotation).green());
 }

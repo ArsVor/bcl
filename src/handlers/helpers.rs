@@ -108,8 +108,8 @@ pub mod get {
     }
 
     pub fn category_info(conn: &Connection, id: i32) -> Result<CategoryInfo> {
-    let info: CategoryInfo = conn.query_row(
-        "SELECT
+        let info: CategoryInfo = conn.query_row(
+            "SELECT
             c.id AS cat_id,
             c.abbr AS cat_abbr,
             c.name AS cat_name,
@@ -124,8 +124,8 @@ pub mod get {
         LEFT JOIN ride r ON r.bike_id = bk.id
         WHERE c.id = ?1
         GROUP BY c.id, c.abbr, c.name",
-        params![id], 
-        CategoryInfo::from_row
+            params![id],
+            CategoryInfo::from_row,
         )?;
         Ok(info)
     }
@@ -494,10 +494,11 @@ pub mod get {
         let mut select_sql: String = "
             SELECT
                 ROW_NUMBER() OVER (ORDER BY l.datestamp DESC) AS row_num,
-                l.id,
-                l.datestamp,
+                l.id AS lub_id,
+                l.datestamp AS date,
+                l.distance AS dist,
                 COALESCE(l.annotation, '') AS ann,
-                concat(c.abbr, ':', b.id_in_cat)
+                concat(c.abbr, ':', b.id_in_cat) AS code
             FROM chain_lubrication l
             JOIN bike b ON b.id = l.bike_id
             JOIN category c ON c.id = b.category_id
@@ -707,6 +708,7 @@ pub mod editor {
         writeln!(tmp, "id: {}", lub.lub_id)?;
         writeln!(tmp, "bike: {}", lub.bike)?;
         writeln!(tmp, "date: {}", lub.date)?;
+        writeln!(tmp, "passed: {}", lub.passed)?;
         writeln!(tmp, "annotation: {}", lub.annotation)?;
 
         tmp.flush()?;
@@ -727,6 +729,7 @@ pub mod editor {
             match key {
                 "bike" => lub.bike = val.trim_ascii().to_string(),
                 "date" => lub.date = val.parse().unwrap_or(lub.date),
+                "passed" => lub.passed = val.parse().unwrap_or(lub.passed),
                 "annotation" => lub.annotation = val.trim_ascii().to_string(),
                 _ => {}
             }

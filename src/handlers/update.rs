@@ -363,21 +363,26 @@ fn lub(conn: &Connection, command: Command, id: u32) -> Result<()> {
         bike_abbr = format!("{}:{}", command.category.unwrap(), command.bike_id.unwrap());
     }
 
+    if let Some(val) = command.val.get() {
+        lub.distance = val;
+    }
+
     conn.execute(
         "UPDATE chain_lubrication
         SET
             bike_id = ?1,
             datestamp = ?2,
-            annotation = ?3
-        WHERE id = ?4",
-        params![lub.bike_id, lub.datestamp, lub.annotation, lub.id],
+            distance = ?3,
+            annotation = ?4
+        WHERE id = ?5",
+        params![lub.bike_id, lub.datestamp, lub.distance, lub.annotation, lub.id],
     )?;
 
     println!(
         "{}",
         format!(
-            "Chain Lubrication id:\"{0}\" modified to: {1} {2} {3}",
-            &lub.id, &bike_abbr, &lub.datestamp, &lub.annotation
+            "Chain Lubrication id:\"{0}\" modified to: {1} {2} {3}km {4}",
+            &lub.id, &bike_abbr, &lub.datestamp, lub.distance, &lub.annotation
         )
         .blue()
     );

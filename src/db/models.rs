@@ -113,6 +113,7 @@ pub struct ChainLubrication {
     pub id: i32,
     pub bike_id: i32,
     pub datestamp: NaiveDate,
+    pub distance: f32,
     pub annotation: String,
 }
 
@@ -122,6 +123,7 @@ pub struct ChainLubricationList {
     pub lub_id: i32,
     pub bike: String,
     pub date: NaiveDate,
+    pub passed: f32,
     pub annotation: String,
 }
 
@@ -152,24 +154,6 @@ pub struct BuyToCategory {
     pub buy_id: i32,
     pub category_id: i32,
 }
-
-// impl<T: fmt::Display> fmt::Display for Opt<T> {
-//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-//         match &self.0 {
-//             Some(v) => write!(f, "{}", &v),
-//             None => write!(f, "—"), // тут можна поставити "" або будь-що
-//         }
-//     }
-// }
-//
-// impl<T> Opt<T> {
-//     pub fn unwrap(&self) -> T
-//     where
-//         T: Clone,
-//     {
-//         self.0.clone().unwrap()
-//     }
-// }
 
 impl Category {
     pub fn from_row(row: &Row) -> Result<Self> {
@@ -309,6 +293,7 @@ impl ChainLubrication {
             id: row.get("id")?,
             bike_id: row.get("bike_id")?,
             datestamp: row.get("datestamp")?,
+            distance: row.get("distance")?,
             annotation: row.get("annotation")?,
         })
     }
@@ -317,11 +302,12 @@ impl ChainLubrication {
 impl ChainLubricationList {
     pub fn from_row(row: &Row) -> Result<Self> {
         Ok(Self {
-            id: row.get(0)?,
-            lub_id: row.get(1)?,
-            bike: row.get(4)?,
-            date: row.get(2)?,
-            annotation: row.get(3)?,
+            id: row.get("row_num")?,
+            lub_id: row.get("lub_id")?,
+            bike: row.get("code")?,
+            date: row.get("date")?,
+            passed: row.get("dist")?,
+            annotation: row.get("ann")?,
         })
     }
 }
