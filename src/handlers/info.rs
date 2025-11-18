@@ -2,18 +2,22 @@ use owo_colors::OwoColorize;
 use rusqlite::{Connection, Result, params};
 
 use crate::cli::structs::Command;
-use crate::db::models::{BikeInfo, BikeList, Category, CategoryInfo, ChainLubricationList};
+use crate::db::models::{
+    BikeInfo, BikeList, BuyInfo, Category, CategoryInfo, ChainLubricationList,
+};
 use crate::db::queries;
-use crate::err_exit;
-use crate::output::{self, info};
+use crate::output;
+use crate::{err_exit, suc_exit};
 
 use super::helpers;
+use super::structs::BuysInfoReport;
 
 pub fn route(conn: Connection, command: Command) -> Result<()> {
     let obj: String = command.object.unwrap();
 
     match obj.as_str() {
         "bike" => bike(&conn, command),
+        "buy" => buy(&conn, command),
         "cat" => category(&conn, command),
         "lub" => lub(&conn, command),
         _ => Ok(()),
@@ -49,7 +53,30 @@ fn bike(conn: &Connection, command: Command) -> Result<()> {
 
     let bike: BikeInfo = helpers::get::bike_info(conn, bike_id)?;
 
-    info::ride_info(bike);
+    output::info::bike_info(bike);
+
+    Ok(())
+}
+
+fn buy(conn: &Connection, command: Command) -> Result<()> {
+    let result = helpers::get::buy(conn, command.clone())?;
+
+    let buys: Vec<BuyInfo> = if let helpers::BuyResult::Info(buys) = result {
+        buys
+    } else {
+        unreachable!()
+    };
+
+    match buys.len() {
+        0 => {
+            suc_exit!("Buys for your request was not found.");
+        }
+        1 => output::info::buy_info_single(&buys[0]),
+        _ => {
+            let report: BuysInfoReport = BuysInfoReport::from(buys, &command);
+            output::info::buy_info(report);
+        }
+    }
 
     Ok(())
 }
@@ -88,7 +115,7 @@ fn lub(conn: &Connection, command: Command) -> Result<()> {
         LEFT JOIN bike b ON b.category_id = c.id
         WHERE c.abbr = ?1 AND b.id_in_cat = ?2",
         params![code[0], bike_id],
-        |row| row.get(0)
+        |row| row.get(0),
     )?;
 
     output::info::lub_info(lub, bike_name);

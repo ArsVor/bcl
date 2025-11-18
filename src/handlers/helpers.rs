@@ -8,34 +8,13 @@ use std::process;
 use tempfile::NamedTempFile;
 
 use crate::cli::structs::{Command, Date, Field};
-use crate::db::models::{BikeList, BuyList, Category, ChainLubricationList, RideList};
+use crate::db::models::{BikeList, BuyInfo, BuyList, Category, ChainLubricationList, RideList};
 use crate::db::queries::get_included_excluded;
 use crate::err_exit;
 
-pub fn get_date(date_parts: Date) -> Option<NaiveDate> {
-    if date_parts.day.is_some() {
-        Some(date_parts.to_naive())
-    } else if date_parts.month.is_some() {
-        Some(
-            NaiveDate::from_ymd_opt(
-                date_parts.year_or_now(),
-                date_parts.month.unwrap(),
-                date_parts.day.unwrap_or(1),
-            )
-            .unwrap(),
-        )
-    } else if date_parts.year.is_some() {
-        Some(
-            NaiveDate::from_ymd_opt(
-                date_parts.year.unwrap(),
-                date_parts.month.unwrap_or(1),
-                date_parts.day.unwrap_or(1),
-            )
-            .unwrap(),
-        )
-    } else {
-        None
-    }
+pub enum BuyResult {
+    List(Vec<BuyList>),
+    Info(Vec<BuyInfo>),
 }
 
 pub fn tags_diff(s1: &str, s2: &str) -> HashSet<String> {
@@ -242,13 +221,15 @@ pub mod get {
         Ok(bike_info)
     }
 
-    pub fn buy(conn: &Connection, command: Command) -> Result<Vec<BuyList>> {
+    pub fn buy(conn: &Connection, command: Command) -> Result<BuyResult> {
         let mut select_sql: String = "
             SELECT 
                 b.id AS buy_id,
-                b.name,
-                b.price,
-                b.datestamp,
+                b.name AS buy_name,
+                b.price AS buy_price,
+                b.datestamp AS buy_datestamp,
+                COALESCE(c.name, '') AS category_name,
+                COALESCE(bk.name, '') AS bike_name,
                 COALESCE(GROUP_CONCAT(t.name, ', '), '') AS tags,
             CASE 
                 WHEN c.abbr IS NULL AND bk.id_in_cat IS NULL 
@@ -271,11 +252,23 @@ pub mod get {
 
         let mut where_sql: Vec<String> = vec![];
         let mut dyn_params: Vec<Box<dyn ToSql>> = Vec::new();
-        let eq: bool = command.date.day.is_some();
+        let mut date: Option<NaiveDate> = None;
+        let mut date_lt: Option<NaiveDate> = None;
+        let mut date_gt: Option<NaiveDate> = None;
+        
+        if command.date.day.is_some() {
+            date = Some(command.date.to_naive());   
+        } else if command.date.is_some() {
+            (date_gt, date_lt) = command.date.get_date_range();
+        } else {
+            if command.gt.is_some() {
+                date_gt = Some(command.gt.date_or_first());
+            }
 
-        let date: Option<NaiveDate> = get_date(command.date.clone());
-        let date_lt: Option<NaiveDate> = get_date(command.lt.clone());
-        let date_gt: Option<NaiveDate> = get_date(command.gt.clone());
+            if command.lt.is_some() {
+                date_lt = Some(command.lt.date_or_first());
+            }
+        }
 
         let val: Field<f32> = command.val.clone();
         let val_gt: Field<f32> = command.val_gt.clone();
@@ -304,20 +297,18 @@ pub mod get {
         }
 
         if let Some(date) = date {
-            match eq {
-                true => where_sql.push(format!("b.datestamp = ?{}", where_sql.len() + 1)),
-                false => where_sql.push(format!("b.datestamp >= ?{}", where_sql.len() + 1)),
-            }
+            where_sql.push(format!("b.datestamp = ?{}", where_sql.len() + 1));
             dyn_params.push(Box::new(date));
-        } else {
-            if let Some(date_gt) = date_gt {
-                where_sql.push(format!("b.datestamp > ?{}", where_sql.len() + 1));
-                dyn_params.push(Box::new(date_gt));
-            }
-            if let Some(date_lt) = date_lt {
-                where_sql.push(format!("b.datestamp < ?{}", where_sql.len() + 1));
-                dyn_params.push(Box::new(date_lt));
-            }
+        }
+
+        if let Some(date_gt) = date_gt {
+            where_sql.push(format!("b.datestamp > ?{}", where_sql.len() + 1));
+            dyn_params.push(Box::new(date_gt));
+        }
+
+        if let Some(date_lt) = date_lt {
+            where_sql.push(format!("b.datestamp < ?{}", where_sql.len() + 1));
+            dyn_params.push(Box::new(date_lt));
         }
 
         if let Some(category) = category {
@@ -347,29 +338,57 @@ pub mod get {
             select_sql.push_str(&format!(" LIMIT {}", &command.lim));
         }
 
-        let mut stmt = conn.prepare(&select_sql)?;
-        let buys_iter = stmt.query_map(
-            params_from_iter(dyn_params.iter().map(|b| b.as_ref())),
-            BuyList::from_row,
-        )?;
-
         let (include_id, exclude_id): (HashSet<i32>, HashSet<i32>) =
-            get_included_excluded(conn, command, "buy")?;
+            get_included_excluded(conn, command.clone(), "buy")?;
 
-        let mut buys: Vec<BuyList> = Vec::new();
-        let mut num = 1;
-        for buy_result in buys_iter {
-            let mut buy: BuyList = buy_result?;
-            if (include_id.contains(&buy.buy_id) || include_id.is_empty())
-                && !exclude_id.contains(&buy.buy_id)
-            {
-                buy.id = num;
-                num += 1;
-                buys.push(buy);
+        let mut stmt = conn.prepare(&select_sql)?;
+
+        let result: BuyResult = if let Some(funk) = command.funk.get() {
+
+            match funk.as_str() {
+                "info" => {
+                    let buys_iter = stmt.query_map(
+                        params_from_iter(dyn_params.iter().map(|b| b.as_ref())),
+                        BuyInfo::from_row,
+                    )?;
+
+                    let mut buys: Vec<BuyInfo> = Vec::new();
+                    for buy_result in buys_iter {
+                        let buy: BuyInfo = buy_result?;
+                        if (include_id.contains(&buy.buy_id) || include_id.is_empty())
+                            && !exclude_id.contains(&buy.buy_id)
+                        {
+                            buys.push(buy);
+                        }
+                    }
+                    BuyResult::Info(buys)
+                }
+                _ => {
+                    let buys_iter = stmt.query_map(
+                        params_from_iter(dyn_params.iter().map(|b| b.as_ref())),
+                        BuyList::from_row,
+                    )?;
+
+                    let mut buys: Vec<BuyList> = Vec::new();
+                    let mut num = 1;
+                    for buy_result in buys_iter {
+                        let mut buy: BuyList = buy_result?;
+                        if (include_id.contains(&buy.buy_id) || include_id.is_empty())
+                            && !exclude_id.contains(&buy.buy_id)
+                        {
+                            buy.id = num;
+                            num += 1;
+                            buys.push(buy);
+                        }
+                    }
+                    BuyResult::List(buys)
+                }
             }
-        }
+        } else {
+            unreachable!()
+        };
 
-        Ok(buys)
+        Ok(result)
     }
 
     pub fn ride(conn: &Connection, command: Command) -> Result<Vec<RideList>> {
@@ -391,11 +410,23 @@ pub mod get {
 
         let mut where_sql: Vec<String> = vec![];
         let mut dyn_params: Vec<Box<dyn ToSql>> = Vec::new();
-        let eq: bool = command.date.day.is_some();
+        let mut date: Option<NaiveDate> = None;
+        let mut date_lt: Option<NaiveDate> = None;
+        let mut date_gt: Option<NaiveDate> = None;
+        
+        if command.date.day.is_some() {
+            date = Some(command.date.to_naive());   
+        } else if command.date.is_some() {
+            (date_gt, date_lt) = command.date.get_date_range();
+        } else {
+            if command.gt.is_some() {
+                date_gt = Some(command.gt.date_or_first());
+            }
 
-        let date: Option<NaiveDate> = get_date(command.date.clone());
-        let date_lt: Option<NaiveDate> = get_date(command.lt.clone());
-        let date_gt: Option<NaiveDate> = get_date(command.gt.clone());
+            if command.lt.is_some() {
+                date_lt = Some(command.lt.date_or_first());
+            }
+        }
 
         let val: Field<f32> = command.val.clone();
         let val_gt: Field<f32> = command.val_gt.clone();
@@ -424,20 +455,18 @@ pub mod get {
         }
 
         if let Some(date) = date {
-            match eq {
-                true => where_sql.push(format!("r.datestamp = ?{}", where_sql.len() + 1)),
-                false => where_sql.push(format!("r.datestamp >= ?{}", where_sql.len() + 1)),
-            }
+            where_sql.push(format!("b.datestamp = ?{}", where_sql.len() + 1));
             dyn_params.push(Box::new(date));
-        } else {
-            if let Some(date_gt) = date_gt {
-                where_sql.push(format!("r.datestamp > ?{}", where_sql.len() + 1));
-                dyn_params.push(Box::new(date_gt));
-            }
-            if let Some(date_lt) = date_lt {
-                where_sql.push(format!("r.datestamp < ?{}", where_sql.len() + 1));
-                dyn_params.push(Box::new(date_lt));
-            }
+        }
+
+        if let Some(date_gt) = date_gt {
+            where_sql.push(format!("b.datestamp > ?{}", where_sql.len() + 1));
+            dyn_params.push(Box::new(date_gt));
+        }
+
+        if let Some(date_lt) = date_lt {
+            where_sql.push(format!("b.datestamp < ?{}", where_sql.len() + 1));
+            dyn_params.push(Box::new(date_lt));
         }
 
         if let Some(category) = category {
@@ -507,11 +536,23 @@ pub mod get {
 
         let mut where_sql: Vec<String> = vec![];
         let mut dyn_params: Vec<Box<dyn ToSql>> = Vec::new();
-        let eq: bool = command.date.day.is_some();
+        let mut date: Option<NaiveDate> = None;
+        let mut date_lt: Option<NaiveDate> = None;
+        let mut date_gt: Option<NaiveDate> = None;
+        
+        if command.date.day.is_some() {
+            date = Some(command.date.to_naive());   
+        } else if command.date.is_some() {
+            (date_gt, date_lt) = command.date.get_date_range();
+        } else {
+            if command.gt.is_some() {
+                date_gt = Some(command.gt.date_or_first());
+            }
 
-        let date: Option<NaiveDate> = get_date(command.date.clone());
-        let date_lt: Option<NaiveDate> = get_date(command.lt.clone());
-        let date_gt: Option<NaiveDate> = get_date(command.gt.clone());
+            if command.lt.is_some() {
+                date_lt = Some(command.lt.date_or_first());
+            }
+        }
 
         let bike_id: Option<u8> = command.bike_id.get();
         let category: Option<String> = command.category.get();
@@ -522,20 +563,18 @@ pub mod get {
         }
 
         if let Some(date) = date {
-            match eq {
-                true => where_sql.push(format!("l.datestamp = ?{}", where_sql.len() + 1)),
-                false => where_sql.push(format!("l.datestamp >= ?{}", where_sql.len() + 1)),
-            }
+            where_sql.push(format!("b.datestamp = ?{}", where_sql.len() + 1));
             dyn_params.push(Box::new(date));
-        } else {
-            if let Some(date_gt) = date_gt {
-                where_sql.push(format!("l.datestamp > ?{}", where_sql.len() + 1));
-                dyn_params.push(Box::new(date_gt));
-            }
-            if let Some(date_lt) = date_lt {
-                where_sql.push(format!("l.datestamp < ?{}", where_sql.len() + 1));
-                dyn_params.push(Box::new(date_lt));
-            }
+        }
+
+        if let Some(date_gt) = date_gt {
+            where_sql.push(format!("b.datestamp > ?{}", where_sql.len() + 1));
+            dyn_params.push(Box::new(date_gt));
+        }
+
+        if let Some(date_lt) = date_lt {
+            where_sql.push(format!("b.datestamp < ?{}", where_sql.len() + 1));
+            dyn_params.push(Box::new(date_lt));
         }
 
         if let Some(category) = category {

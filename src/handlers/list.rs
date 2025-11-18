@@ -60,7 +60,15 @@ fn bike(conn: &Connection, command: Command) -> Result<()> {
 }
 
 fn buy(conn: &Connection, command: Command) -> Result<()> {
-    let buys: Vec<BuyList> = helpers::get::buy(conn, command)?;
+    // let buys: Vec<BuyList> = helpers::get::buy(conn, command)?;
+
+    let result = helpers::get::buy(conn, command)?;
+
+    let buys = if let helpers::BuyResult::List(buys) = result {
+        buys
+    } else {
+        unreachable!()
+    };
 
     if !buys.is_empty() {
         let mut table = Table::new(buys);

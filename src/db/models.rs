@@ -51,6 +51,17 @@ pub struct BuyList {
 }
 
 #[derive(Debug, Clone, Tabled)]
+pub struct BuyInfo {
+    pub buy_id: i32,
+    pub category_name: String,
+    pub bike_name: String,
+    pub tags: String,
+    pub name: String,
+    pub price: f32,
+    pub date: NaiveDate,
+}
+
+#[derive(Debug, Clone, Tabled)]
 pub struct Bike {
     pub id: i32,
     pub category_id: i32,
@@ -204,12 +215,26 @@ impl BuyList {
     pub fn from_row(row: &Row) -> Result<Self> {
         Ok(Self {
             id: 0,
-            buy_id: row.get(0)?,
-            target: row.get(5)?,
-            tags: row.get(4)?,
-            name: row.get(1)?,
-            price: row.get(2)?,
-            date: row.get(3)?,
+            buy_id: row.get("buy_id")?,
+            target: row.get("bike_or_category")?,
+            tags: row.get("tags")?,
+            name: row.get("buy_name")?,
+            price: row.get("buy_price")?,
+            date: row.get("buy_datestamp")?,
+        })
+    }
+}
+
+impl BuyInfo {
+    pub fn from_row(row: &Row) -> Result<Self> {
+        Ok(Self {
+            buy_id: row.get("buy_id")?,
+            category_name: row.get("category_name")?,
+            bike_name: row.get("bike_name")?,
+            tags: row.get("tags")?,
+            name: row.get("buy_name")?,
+            price: row.get("buy_price")?,
+            date: row.get("buy_datestamp")?,
         })
     }
 }

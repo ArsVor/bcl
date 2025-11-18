@@ -84,7 +84,13 @@ fn buy(conn: &mut Connection, command: Command) -> Result<()> {
         real_id as i32
     } else {
         let dyn_id: usize = command.id.unwrap() as usize;
-        let buys: Vec<BuyList> = helpers::get::buy(conn, command)?;
+        let result = helpers::get::buy(conn, command)?;
+
+        let buys = if let helpers::BuyResult::List(buys) = result {
+            buys
+        } else {
+            unreachable!()
+        };
 
         let buy: BuyList = buys.get(dyn_id - 1).cloned().unwrap_or_else(|| {
             err_exit!("buy for your request was not found.");

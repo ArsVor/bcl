@@ -102,7 +102,13 @@ fn bike(conn: &Connection, command: Command) -> Result<()> {
 
 fn buy(conn: &mut Connection, command: Command) -> Result<()> {
     let id: Option<u32> = command.id.get();
-    let mut buys: Vec<BuyList> = helpers::get::buy(conn, command)?;
+    let result = helpers::get::buy(conn, command)?;
+
+    let mut buys = if let helpers::BuyResult::List(buys) = result {
+        buys
+    } else {
+        unreachable!()
+    };
     let mut category_id: Option<i32> = None;
     let mut bike_id: Option<i32> = None;
     let mut is_changed: bool = false;

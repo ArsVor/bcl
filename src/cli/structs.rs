@@ -119,11 +119,27 @@ impl Date {
         }
     }
 
+    pub fn month_or_first(&self) -> u32 {
+        if self.month.is_some() {
+            self.month.unwrap()
+        } else {
+            1
+        }
+    }
+
     pub fn day_or_now(&self) -> u32 {
         if self.day.is_some() {
             self.day.unwrap()
         } else {
             Local::now().day()
+        }
+    }
+
+    pub fn day_or_first(&self) -> u32 {
+        if self.day.is_some() {
+            self.day.unwrap()
+        } else {
+            1
         }
     }
 
@@ -263,6 +279,29 @@ impl Date {
 
     pub fn to_naive(&self) -> NaiveDate {
         NaiveDate::from_ymd_opt(self.year_or_now(), self.month_or_now(), self.day_or_now()).unwrap()
+    }
+
+    pub fn date_or_first(&self) -> NaiveDate {
+        NaiveDate::from_ymd_opt(
+            self.year_or_now(),
+            self.month_or_first(),
+            self.day_or_first(),
+        )
+        .unwrap()
+    }
+
+    pub fn get_date_range(&self) -> (Option<NaiveDate>, Option<NaiveDate>) {
+        let date_gt: NaiveDate;
+        let date_lt: NaiveDate;
+        let year: i32 = self.year_or_now();
+        if let Some(month) = self.month {
+            date_gt = NaiveDate::from_ymd_opt(year, month, 1).unwrap();
+            date_lt = NaiveDate::from_ymd_opt(year, month + 1, 1).unwrap();
+        } else {
+            date_gt = NaiveDate::from_ymd_opt(year, 1, 1).unwrap();
+            date_lt = NaiveDate::from_ymd_opt(year + 1, 1, 1).unwrap();
+        }
+        (Some(date_gt), Some(date_lt))
     }
 
     fn is_leap_year(year: i32) -> bool {

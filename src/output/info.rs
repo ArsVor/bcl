@@ -1,11 +1,12 @@
 use owo_colors::OwoColorize;
+use std::cmp;
 
 use crate::{
-    db::models::{BikeInfo, CategoryInfo, ChainLubricationList},
-    handlers::helpers::get::bike,
+    db::models::{BikeInfo, Buy, BuyInfo, CategoryInfo, ChainLubricationList},
+    handlers::{helpers::get::bike, structs::BuysInfoReport},
 };
 
-pub fn ride_info(bike: BikeInfo) {
+pub fn bike_info(bike: BikeInfo) {
     let after_lub_distance: f32 = bike.after_lub_distance;
     let msg: String = format!(
         "Without chain lubrication, passed: {} km",
@@ -57,6 +58,94 @@ pub fn ride_info(bike: BikeInfo) {
             println!("{}", msg.green());
         }
     };
+}
+
+pub fn buy_info(report: BuysInfoReport) {
+    println!("{}", "\n~~ Buys ~~".green());
+    if let Some(date) = report.date_eq {
+        println!("{}", format!("for {}", &date).green());
+    } else {
+        let mut date_str: String = String::new();
+
+        if let Some(date) = report.date_gt {
+            date_str += &format!("from: {}", &date)
+        }
+
+        if let Some(date) = report.date_lt {
+            date_str += &format!("  to: {}", &date)
+        }
+
+        if !date_str.is_empty() {
+            println!("{}", date_str.green());
+        }
+    }
+    println!(
+        "{}",
+        format!("Last bought:        {}", &report.last_price).green()
+    );
+    println!(
+        "{}",
+        format!("on:                 {}", &report.last_date.unwrap()).green()
+    );
+    println!(
+        "{}",
+        format!("Buys count:         {}", &report.buys_count).green()
+    );
+    println!(
+        "{}",
+        format!("Total spend:        {}", &report.total_spend).green()
+    );
+
+    match report.iter_type.as_str() {
+        "cat" => {
+            println!("{}", "\nFor categories:".green());
+        }
+        "bike" => {
+            println!("{}", "\nFor bikes:".green());
+        }
+        _ => {}
+    }
+
+    if !report.iter_type.is_empty() {
+        let width: usize = cmp::max(
+            report
+                .spend_by_categories
+                .keys()
+                .max_by_key(|n| n.len())
+                .unwrap()
+                .len()
+                + 6,
+            19,
+        );
+
+        for (cat, spend) in report.spend_by_categories.iter() {
+            println!(
+                "{}",
+                format!("{:width$} {}", format!("{cat}:"), spend).green()
+            );
+        }
+        println!(
+            "{}",
+            format!("{:width$} {}", "Uncategorized:", report.spend_uncategorized).green()
+        )
+    }
+}
+
+pub fn buy_info_single(buy: &BuyInfo) {
+    let mut target: &String = &"uncategorized".to_string();
+
+    if !buy.bike_name.is_empty() {
+        target = &buy.bike_name;
+    } else if !buy.category_name.is_empty() {
+        target = &buy.category_name;
+    }
+
+    println!("{}", format!("\n~~ {} ~~", &buy.name).green());
+    println!("{}", format!("ID:             {}", &buy.buy_id).green());
+    println!("{}", format!("Date:           {}", &buy.date).green());
+    println!("{}", format!("For:            {}", &target).green());
+    println!("{}", format!("Tags:           {}", &buy.tags).green());
+    println!("{}", format!("Price:          {}", &buy.price).green());
 }
 
 pub fn category_info(info: CategoryInfo) {

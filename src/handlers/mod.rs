@@ -4,4 +4,5 @@ pub mod edit;
 pub mod helpers;
 pub mod info;
 pub mod list;
+pub mod structs;
 pub mod update;
