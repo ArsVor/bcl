@@ -108,6 +108,18 @@ pub struct Ride {
     pub annotation: String,
 }
 
+#[derive(Debug, Clone)]
+pub struct RideInfo {
+    pub ride_id: i32,
+    pub code: String,
+    pub category: String,
+    pub bike: String,
+    pub date: NaiveDate,
+    pub distance: f32,
+    pub tags: String,
+    pub annotation: String,
+}
+
 #[derive(Debug, Clone, Tabled)]
 pub struct RideList {
     pub id: i32,
@@ -298,16 +310,31 @@ impl Ride {
     }
 }
 
+impl RideInfo {
+    pub fn from_row(row: &Row) -> Result<Self> {
+        Ok(Self {
+            ride_id: row.get("ride_id")?,
+            code: row.get("code")?,
+            category: row.get("category_name")?,
+            bike: row.get("bike_name")?,
+            date: row.get("date")?,
+            distance: row.get("distance")?,
+            tags: row.get("tags")?,
+            annotation: row.get("ann")?,
+        })
+    }
+}
+
 impl RideList {
     pub fn from_row(row: &Row) -> Result<Self> {
         Ok(Self {
             id: 0,
-            ride_id: row.get(0)?,
-            bike: row.get(3)?,
-            date: row.get(1)?,
-            distance: row.get(2)?,
-            tags: row.get(5)?,
-            annotation: row.get(4)?,
+            ride_id: row.get("ride_id")?,
+            bike: row.get("code")?,
+            date: row.get("date")?,
+            distance: row.get("distance")?,
+            tags: row.get("tags")?,
+            annotation: row.get("ann")?,
         })
     }
 }

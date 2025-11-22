@@ -6,7 +6,7 @@ use tabled::settings::Style;
 use crate::cli::structs::Command;
 use crate::db::models::{BikeList, BuyList, Category, ChainLubricationList, RideList};
 
-use super::helpers;
+use super::helpers::{self, BuyResult, RideResult};
 
 pub fn route(conn: Connection, command: Command) -> Result<()> {
     let obj = command.object.unwrap();
@@ -60,9 +60,7 @@ fn bike(conn: &Connection, command: Command) -> Result<()> {
 }
 
 fn buy(conn: &Connection, command: Command) -> Result<()> {
-    // let buys: Vec<BuyList> = helpers::get::buy(conn, command)?;
-
-    let result = helpers::get::buy(conn, command)?;
+    let result: BuyResult = helpers::get::buy(conn, command)?;
 
     let buys = if let helpers::BuyResult::List(buys) = result {
         buys
@@ -82,7 +80,13 @@ fn buy(conn: &Connection, command: Command) -> Result<()> {
 }
 
 fn ride(conn: &Connection, command: Command) -> Result<()> {
-    let rides: Vec<RideList> = helpers::get::ride(conn, command)?;
+    let result: RideResult = helpers::get::ride(conn, command)?;
+
+    let rides: Vec<RideList> = if let helpers::RideResult::List(rides) = result {
+        rides
+    } else {
+        unreachable!()
+    };
 
     if !rides.is_empty() {
         let mut table = Table::new(rides);

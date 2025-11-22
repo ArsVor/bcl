@@ -6,7 +6,7 @@ use crate::db::models::{BikeList, BuyList, ChainLubricationList, RideList};
 use crate::db::queries::tag_del_if_unused;
 use crate::{err_exit, suc_exit};
 
-use super::helpers;
+use super::helpers::{self, BuyResult, RideResult};
 
 pub fn route(mut conn: Connection, command: Command) -> Result<()> {
     let obj = command.object.unwrap();
@@ -84,7 +84,7 @@ fn buy(conn: &mut Connection, command: Command) -> Result<()> {
         real_id as i32
     } else {
         let dyn_id: usize = command.id.unwrap() as usize;
-        let result = helpers::get::buy(conn, command)?;
+        let result: BuyResult = helpers::get::buy(conn, command)?;
 
         let buys = if let helpers::BuyResult::List(buys) = result {
             buys
@@ -203,7 +203,13 @@ fn ride(conn: &mut Connection, command: Command) -> Result<()> {
         real_id as i32
     } else {
         let dyn_id: usize = command.id.unwrap() as usize;
-        let rides: Vec<RideList> = helpers::get::ride(conn, command)?;
+        let result: RideResult = helpers::get::ride(conn, command)?;
+
+        let rides: Vec<RideList> = if let helpers::RideResult::List(rides) = result {
+            rides
+        } else {
+            unreachable!()
+        };
 
         let ride: RideList = rides.get(dyn_id - 1).cloned().unwrap_or_else(|| {
             err_exit!("Ride for your request was not found.");

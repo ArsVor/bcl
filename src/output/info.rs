@@ -2,8 +2,11 @@ use owo_colors::OwoColorize;
 use std::cmp;
 
 use crate::{
-    db::models::{BikeInfo, Buy, BuyInfo, CategoryInfo, ChainLubricationList},
-    handlers::{helpers::get::bike, structs::BuysInfoReport},
+    db::models::{BikeInfo, Buy, BuyInfo, CategoryInfo, ChainLubricationList, RideInfo},
+    handlers::{
+        helpers::get::bike,
+        structs::{BuysInfoReport, RidesInfoReport},
+    },
 };
 
 pub fn bike_info(bike: BikeInfo) {
@@ -61,9 +64,19 @@ pub fn bike_info(bike: BikeInfo) {
 }
 
 pub fn buy_info(report: BuysInfoReport) {
+    let width: usize = cmp::max(
+        report
+            .spend_by_categories
+            .keys()
+            .max_by_key(|k| k.len())
+            .unwrap_or(&"".to_string())
+            .len()
+            + 4,
+        15,
+    );
     println!("{}", "\n~~ Buys ~~".green());
     if let Some(date) = report.date_eq {
-        println!("{}", format!("for {}", &date).green());
+        println!("{}", format!("at:  {}", &date).green());
     } else {
         let mut date_str: String = String::new();
 
@@ -81,43 +94,32 @@ pub fn buy_info(report: BuysInfoReport) {
     }
     println!(
         "{}",
-        format!("Last bought:        {}", &report.last_price).green()
+        format!("{:width$} {}", "Buys count:", &report.buys_count).green()
     );
     println!(
         "{}",
-        format!("on:                 {}", &report.last_date.unwrap()).green()
+        format!("{:width$} {}", "Last bought:", &report.last_price).green()
     );
     println!(
         "{}",
-        format!("Buys count:         {}", &report.buys_count).green()
+        format!("{:width$} {}", "on:", &report.last_date.unwrap()).green()
     );
     println!(
         "{}",
-        format!("Total spend:        {}", &report.total_spend).green()
+        format!("{:width$} {}", "Total spend:", &report.total_spend).green()
     );
 
     match report.iter_type.as_str() {
         "cat" => {
-            println!("{}", "\nFor categories:".green());
+            println!("{}", "\nFor category:".green());
         }
         "bike" => {
-            println!("{}", "\nFor bikes:".green());
+            println!("{}", "\nFor bike:".green());
         }
         _ => {}
     }
 
     if !report.iter_type.is_empty() {
-        let width: usize = cmp::max(
-            report
-                .spend_by_categories
-                .keys()
-                .max_by_key(|n| n.len())
-                .unwrap()
-                .len()
-                + 6,
-            19,
-        );
-
         for (cat, spend) in report.spend_by_categories.iter() {
             println!(
                 "{}",
@@ -178,4 +180,81 @@ pub fn lub_info(lub: ChainLubricationList, bike_name: String) {
     println!("{}", format!("Date:       {}", &lub.date).green());
     println!("{}", format!("Passed:     {}", &lub.passed).green());
     println!("{}", format!("Annotation: {}", &lub.annotation).green());
+}
+
+pub fn ride_info(report: RidesInfoReport) {
+    println!("{}", "\n~~ Rides ~~".green());
+
+    let width: usize = cmp::max(
+        report
+            .distance_by_categories
+            .keys()
+            .max_by_key(|k| k.len())
+            .unwrap_or(&"".to_string())
+            .len()
+            + 4,
+        15,
+    );
+
+    if let Some(date) = report.date_eq {
+        println!("{}", format!("at:  {}", &date).green());
+    } else {
+        let mut date_str: String = String::new();
+
+        if let Some(date) = report.date_gt {
+            date_str += &format!("from: {}", &date)
+        }
+
+        if let Some(date) = report.date_lt {
+            date_str += &format!("  to: {}", &date)
+        }
+
+        if !date_str.is_empty() {
+            println!("{}", date_str.green());
+        }
+    }
+
+    println!(
+        "{}",
+        format!("{:width$} {}", "Rides count:", &report.rides_count).green()
+    );
+    println!(
+        "{}",
+        format!("{:width$} {}", "Last ride:", &report.last_distance).green()
+    );
+    println!(
+        "{}",
+        format!("{:width$} {}", "on:", &report.last_date.unwrap()).green()
+    );
+    println!(
+        "{}",
+        format!("{:width$} {}", "Total distance:", &report.total_distance).green()
+    );
+
+    if !report.iter_type.is_empty() {
+        match report.iter_type.as_str() {
+            "cat" => {
+                println!("{}", "\nBy category:".green());
+            }
+            "bike" => {
+                println!("{}", "\nBy bike:".green());
+            }
+            _ => {}
+        }
+
+        for (cat, distance) in report.distance_by_categories.iter() {
+            println!("{}", format!("{:width$} {}", &cat, &distance).green());
+        }
+    }
+}
+
+pub fn ride_info_single(ride: &RideInfo) {
+    println!("{}", "\n~~ Ride ~~".green());
+    println!("{}", "Count:      1".green());
+    println!("{}", format!("ID:         {}", &ride.ride_id).green());
+    println!("{}", format!("Bike:       {}", &ride.bike).green());
+    println!("{}", format!("Date:       {}", &ride.date).green());
+    println!("{}", format!("Distance:   {}", &ride.distance).green());
+    println!("{}", format!("Tags:       {}", &ride.tags).green());
+    println!("{}", format!("Annotation: {}", &ride.annotation).green());
 }

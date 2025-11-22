@@ -7,14 +7,21 @@ use std::io::Write;
 use std::process;
 use tempfile::NamedTempFile;
 
-use crate::cli::structs::{Command, Date, Field};
-use crate::db::models::{BikeList, BuyInfo, BuyList, Category, ChainLubricationList, RideList};
+use crate::cli::structs::{Command, Field};
+use crate::db::models::{
+    BikeList, BuyInfo, BuyList, Category, ChainLubricationList, RideInfo, RideList,
+};
 use crate::db::queries::get_included_excluded;
 use crate::err_exit;
 
 pub enum BuyResult {
     List(Vec<BuyList>),
     Info(Vec<BuyInfo>),
+}
+
+pub enum RideResult {
+    List(Vec<RideList>),
+    Info(Vec<RideInfo>),
 }
 
 pub fn tags_diff(s1: &str, s2: &str) -> HashSet<String> {
@@ -126,10 +133,10 @@ pub mod get {
         let mut select_sql: String = "
             SELECT 
                 ROW_NUMBER() OVER (ORDER BY c.id) AS row_num,
-                b.id, 
+                b.id AS bike_id, 
                 concat(c.abbr, ':', b.id_in_cat) AS code, 
-                b.name, 
-                b.datestamp  
+                b.name AS bike_name, 
+                b.datestamp AS date  
             FROM bike b 
                 JOIN category c ON c.id = b.category_id
         "
@@ -255,9 +262,9 @@ pub mod get {
         let mut date: Option<NaiveDate> = None;
         let mut date_lt: Option<NaiveDate> = None;
         let mut date_gt: Option<NaiveDate> = None;
-        
+
         if command.date.day.is_some() {
-            date = Some(command.date.to_naive());   
+            date = Some(command.date.to_naive());
         } else if command.date.is_some() {
             (date_gt, date_lt) = command.date.get_date_range();
         } else {
@@ -344,7 +351,6 @@ pub mod get {
         let mut stmt = conn.prepare(&select_sql)?;
 
         let result: BuyResult = if let Some(funk) = command.funk.get() {
-
             match funk.as_str() {
                 "info" => {
                     let buys_iter = stmt.query_map(
@@ -391,13 +397,15 @@ pub mod get {
         Ok(result)
     }
 
-    pub fn ride(conn: &Connection, command: Command) -> Result<Vec<RideList>> {
+    pub fn ride(conn: &Connection, command: Command) -> Result<RideResult> {
         let mut select_sql: String = "
             SELECT
-                r.id,
-                r.datestamp,
-                r.distance,
-                concat(c.abbr, ':', b.id_in_cat) as cat_bike,
+                r.id AS ride_id,
+                r.datestamp AS date,
+                r.distance AS distance,
+                concat(c.abbr, ':', b.id_in_cat) AS code,
+                b.name AS bike_name,
+                c.name AS category_name,
                 COALESCE(r.annotation, '') AS ann,
                 COALESCE(GROUP_CONCAT(t.name, ', '), '') AS tags
             FROM ride r
@@ -413,9 +421,9 @@ pub mod get {
         let mut date: Option<NaiveDate> = None;
         let mut date_lt: Option<NaiveDate> = None;
         let mut date_gt: Option<NaiveDate> = None;
-        
+
         if command.date.day.is_some() {
-            date = Some(command.date.to_naive());   
+            date = Some(command.date.to_naive());
         } else if command.date.is_some() {
             (date_gt, date_lt) = command.date.get_date_range();
         } else {
@@ -455,17 +463,17 @@ pub mod get {
         }
 
         if let Some(date) = date {
-            where_sql.push(format!("b.datestamp = ?{}", where_sql.len() + 1));
+            where_sql.push(format!("r.datestamp = ?{}", where_sql.len() + 1));
             dyn_params.push(Box::new(date));
         }
 
         if let Some(date_gt) = date_gt {
-            where_sql.push(format!("b.datestamp > ?{}", where_sql.len() + 1));
+            where_sql.push(format!("r.datestamp > ?{}", where_sql.len() + 1));
             dyn_params.push(Box::new(date_gt));
         }
 
         if let Some(date_lt) = date_lt {
-            where_sql.push(format!("b.datestamp < ?{}", where_sql.len() + 1));
+            where_sql.push(format!("r.datestamp < ?{}", where_sql.len() + 1));
             dyn_params.push(Box::new(date_lt));
         }
 
@@ -495,28 +503,56 @@ pub mod get {
         }
 
         let (include_id, exclude_id): (HashSet<i32>, HashSet<i32>) =
-            get_included_excluded(conn, command, "ride")?;
+            get_included_excluded(conn, command.clone(), "ride")?;
 
         let mut stmt = conn.prepare(&select_sql)?;
-        let rides_iter = stmt.query_map(
-            params_from_iter(dyn_params.iter().map(|b| b.as_ref())),
-            RideList::from_row,
-        )?;
 
-        let mut rides: Vec<RideList> = Vec::new();
-        let mut num: i32 = 1;
-        for ride_result in rides_iter {
-            let mut ride = ride_result?;
-            if (include_id.contains(&ride.ride_id) || include_id.is_empty())
-                && !exclude_id.contains(&ride.ride_id)
-            {
-                ride.id = num;
-                num += 1;
-                rides.push(ride);
+        let result: RideResult = if let Some(funk) = command.funk.get() {
+            match funk.as_str() {
+                "info" => {
+                    let rides_iter = stmt.query_map(
+                        params_from_iter(dyn_params.iter().map(|b| b.as_ref())),
+                        RideInfo::from_row,
+                    )?;
+
+                    let mut rides: Vec<RideInfo> = Vec::new();
+
+                    for ride_result in rides_iter {
+                        let ride = ride_result?;
+                        if (include_id.contains(&ride.ride_id) || include_id.is_empty())
+                            && !exclude_id.contains(&ride.ride_id)
+                        {
+                            rides.push(ride);
+                        }
+                    }
+                    RideResult::Info(rides)
+                }
+                _ => {
+                    let rides_iter = stmt.query_map(
+                        params_from_iter(dyn_params.iter().map(|b| b.as_ref())),
+                        RideList::from_row,
+                    )?;
+
+                    let mut rides: Vec<RideList> = Vec::new();
+                    let mut num: i32 = 1;
+                    for ride_result in rides_iter {
+                        let mut ride = ride_result?;
+                        if (include_id.contains(&ride.ride_id) || include_id.is_empty())
+                            && !exclude_id.contains(&ride.ride_id)
+                        {
+                            ride.id = num;
+                            num += 1;
+                            rides.push(ride);
+                        }
+                    }
+                    RideResult::List(rides)
+                }
             }
-        }
+        } else {
+            unreachable!()
+        };
 
-        Ok(rides)
+        Ok(result)
     }
 
     pub fn chain_lub(conn: &Connection, command: Command) -> Result<Vec<ChainLubricationList>> {
@@ -539,9 +575,9 @@ pub mod get {
         let mut date: Option<NaiveDate> = None;
         let mut date_lt: Option<NaiveDate> = None;
         let mut date_gt: Option<NaiveDate> = None;
-        
+
         if command.date.day.is_some() {
-            date = Some(command.date.to_naive());   
+            date = Some(command.date.to_naive());
         } else if command.date.is_some() {
             (date_gt, date_lt) = command.date.get_date_range();
         } else {
@@ -563,17 +599,17 @@ pub mod get {
         }
 
         if let Some(date) = date {
-            where_sql.push(format!("b.datestamp = ?{}", where_sql.len() + 1));
+            where_sql.push(format!("l.datestamp = ?{}", where_sql.len() + 1));
             dyn_params.push(Box::new(date));
         }
 
         if let Some(date_gt) = date_gt {
-            where_sql.push(format!("b.datestamp > ?{}", where_sql.len() + 1));
+            where_sql.push(format!("l.datestamp > ?{}", where_sql.len() + 1));
             dyn_params.push(Box::new(date_gt));
         }
 
         if let Some(date_lt) = date_lt {
-            where_sql.push(format!("b.datestamp < ?{}", where_sql.len() + 1));
+            where_sql.push(format!("l.datestamp < ?{}", where_sql.len() + 1));
             dyn_params.push(Box::new(date_lt));
         }
 

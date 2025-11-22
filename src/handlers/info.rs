@@ -3,14 +3,15 @@ use rusqlite::{Connection, Result, params};
 
 use crate::cli::structs::Command;
 use crate::db::models::{
-    BikeInfo, BikeList, BuyInfo, Category, CategoryInfo, ChainLubricationList,
+    BikeInfo, BikeList, BuyInfo, Category, CategoryInfo, ChainLubricationList, RideInfo,
 };
 use crate::db::queries;
+use crate::handlers::helpers::{BuyResult, RideResult};
+use crate::handlers::structs::{BuysInfoReport, RidesInfoReport};
 use crate::output;
 use crate::{err_exit, suc_exit};
 
 use super::helpers;
-use super::structs::BuysInfoReport;
 
 pub fn route(conn: Connection, command: Command) -> Result<()> {
     let obj: String = command.object.unwrap();
@@ -20,6 +21,7 @@ pub fn route(conn: Connection, command: Command) -> Result<()> {
         "buy" => buy(&conn, command),
         "cat" => category(&conn, command),
         "lub" => lub(&conn, command),
+        "ride" => ride(&conn, command),
         _ => Ok(()),
     }
 }
@@ -59,7 +61,7 @@ fn bike(conn: &Connection, command: Command) -> Result<()> {
 }
 
 fn buy(conn: &Connection, command: Command) -> Result<()> {
-    let result = helpers::get::buy(conn, command.clone())?;
+    let result: BuyResult = helpers::get::buy(conn, command.clone())?;
 
     let buys: Vec<BuyInfo> = if let helpers::BuyResult::Info(buys) = result {
         buys
@@ -119,6 +121,30 @@ fn lub(conn: &Connection, command: Command) -> Result<()> {
     )?;
 
     output::info::lub_info(lub, bike_name);
+
+    Ok(())
+}
+
+fn ride(conn: &Connection, command: Command) -> Result<()> {
+    let result: RideResult = helpers::get::ride(conn, command.clone())?;
+
+    let rides: Vec<RideInfo> = if let helpers::RideResult::Info(rides) = result {
+        rides
+    } else {
+        unreachable!()
+    };
+
+    match rides.len() {
+        0 => {
+            suc_exit!("Rides for your request was not found.");
+        }
+        1 => output::info::ride_info_single(&rides[0]),
+        _ => {
+            let report: RidesInfoReport = RidesInfoReport::from(rides, &command);
+            output::info::ride_info(report);
+            // println!("{:?}", &report);
+        }
+    }
 
     Ok(())
 }

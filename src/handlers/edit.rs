@@ -8,7 +8,7 @@ use crate::db::models::{BikeList, BuyList, Category, ChainLubricationList, RideL
 use crate::db::queries::{get_bike, get_category, tag_del_if_unused, tag_get_or_create};
 use crate::err_exit;
 
-use super::helpers;
+use super::helpers::{self, BuyResult, RideResult};
 
 pub fn route(mut conn: Connection, command: Command) -> Result<()> {
     let obj = command.object.unwrap();
@@ -102,7 +102,7 @@ fn bike(conn: &Connection, command: Command) -> Result<()> {
 
 fn buy(conn: &mut Connection, command: Command) -> Result<()> {
     let id: Option<u32> = command.id.get();
-    let result = helpers::get::buy(conn, command)?;
+    let result: BuyResult = helpers::get::buy(conn, command)?;
 
     let mut buys = if let helpers::BuyResult::List(buys) = result {
         buys
@@ -394,8 +394,14 @@ fn chain_lub(conn: &Connection, command: Command) -> Result<()> {
 
 fn ride(conn: &mut Connection, command: Command) -> Result<()> {
     let id: Option<u32> = command.id.get();
-    let mut rides: Vec<RideList> = helpers::get::ride(conn, command)?;
     let mut deleted_tags: Vec<String> = Vec::new();
+    let result: RideResult = helpers::get::ride(conn, command)?;
+
+    let mut rides: Vec<RideList> = if let helpers::RideResult::List(rides) = result {
+        rides
+    } else {
+        unreachable!()
+    };
 
     let ride_def: RideList = match (rides.len(), id) {
         (0, _) => {
