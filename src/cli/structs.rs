@@ -20,6 +20,8 @@ pub struct Command {
     pub funk: Field<String>,
     pub object: Field<String>,
     pub category: Field<String>,
+    pub output: Field<String>,
+    pub group_by: Field<String>,
     pub annotation: Vec<String>,
     pub date: Date,
     pub lt: Date,
@@ -282,12 +284,15 @@ impl Date {
     }
 
     pub fn date_or_first(&self) -> NaiveDate {
-        NaiveDate::from_ymd_opt(
+        if let Some(date) = NaiveDate::from_ymd_opt(
             self.year_or_now(),
             self.month_or_first(),
             self.day_or_first(),
-        )
-        .unwrap()
+        ) {
+            date
+        } else {
+            err_exit!("Non valid date given.");
+        }
     }
 
     pub fn get_date_range(&self) -> (Option<NaiveDate>, Option<NaiveDate>) {
@@ -315,6 +320,8 @@ impl Command {
             funk: Field::new(),
             object: Field::new(),
             category: Field::new(),
+            output: Field::new(),
+            group_by: Field::new(),
             annotation: Vec::new(),
             date: Date::new(),
             lt: Date::new(),
@@ -345,7 +352,7 @@ impl Command {
 
         for arg in args.into_iter() {
             match arg.as_str() {
-                "add" | "del" | "mod" | "edit" | "list" | "info" | "graph" | "sync" => {
+                "add" | "del" | "mod" | "edit" | "list" | "info" | "sync" => {
                     command
                         .funk
                         .set_or_err(Some(arg), "multiple command input.");
@@ -422,6 +429,10 @@ impl Command {
 
         if !command.date.is_valid_date() {
             err_exit!("Non valid date given.");
+        }
+
+        if command.funk.clone().unwrap() == "info" {
+            command.lim = 0;
         }
 
         command

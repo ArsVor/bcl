@@ -340,7 +340,12 @@ pub mod get {
         }
 
         select_sql
-            .push_str("GROUP BY b.id, b.name, b.price, b.datestamp ORDER BY b.datestamp DESC");
+            .push_str("GROUP BY b.id, b.name, b.price, b.datestamp ORDER BY b.datestamp");
+
+        if command.funk.unwrap() != "info" {
+            select_sql.push_str(" DESC");
+        }
+
         if command.lim > 0 {
             select_sql.push_str(&format!(" LIMIT {}", &command.lim));
         }
@@ -497,7 +502,13 @@ pub mod get {
             select_sql.push_str(" WHERE ");
             select_sql.push_str(&where_sql.join(" AND "));
         }
-        select_sql.push_str("GROUP BY r.id ORDER BY r.datestamp DESC");
+
+        select_sql.push_str("GROUP BY r.id ORDER BY r.datestamp");
+
+        if command.funk.unwrap() != "info" {
+            select_sql.push_str(" DESC");
+        }
+
         if command.lim > 0 {
             select_sql.push_str(&format!(" LIMIT {}", &command.lim));
         }

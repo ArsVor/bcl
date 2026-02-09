@@ -53,6 +53,7 @@ pub struct BuyList {
 #[derive(Debug, Clone, Tabled)]
 pub struct BuyInfo {
     pub buy_id: i32,
+    pub code: String,
     pub category_name: String,
     pub bike_name: String,
     pub tags: String,
@@ -211,46 +212,6 @@ impl Tag {
     }
 }
 
-impl Buy {
-    pub fn from_row(row: &Row) -> Result<Self> {
-        Ok(Self {
-            id: row.get(0)?,
-            name: row.get(1)?,
-            price: row.get(2)?,
-            datestamp: row.get(3)?,
-            tags: row.get(4)?,
-        })
-    }
-}
-
-impl BuyList {
-    pub fn from_row(row: &Row) -> Result<Self> {
-        Ok(Self {
-            id: 0,
-            buy_id: row.get("buy_id")?,
-            target: row.get("bike_or_category")?,
-            tags: row.get("tags")?,
-            name: row.get("buy_name")?,
-            price: row.get("buy_price")?,
-            date: row.get("buy_datestamp")?,
-        })
-    }
-}
-
-impl BuyInfo {
-    pub fn from_row(row: &Row) -> Result<Self> {
-        Ok(Self {
-            buy_id: row.get("buy_id")?,
-            category_name: row.get("category_name")?,
-            bike_name: row.get("bike_name")?,
-            tags: row.get("tags")?,
-            name: row.get("buy_name")?,
-            price: row.get("buy_price")?,
-            date: row.get("buy_datestamp")?,
-        })
-    }
-}
-
 impl Bike {
     pub fn from_row(row: &Row) -> Result<Self> {
         Ok(Self {
@@ -295,17 +256,58 @@ impl BikeList {
     }
 }
 
+impl Buy {
+    pub fn from_row(row: &Row) -> Result<Self> {
+        Ok(Self {
+            id: row.get("buy_id")?,
+            name: row.get("name")?,
+            price: row.get("price")?,
+            datestamp: row.get("datestamp")?,
+            tags: row.get("tags")?,
+        })
+    }
+}
+
+impl BuyList {
+    pub fn from_row(row: &Row) -> Result<Self> {
+        Ok(Self {
+            id: 0,
+            buy_id: row.get("buy_id")?,
+            target: row.get("bike_or_category")?,
+            tags: row.get("tags")?,
+            name: row.get("buy_name")?,
+            price: row.get("buy_price")?,
+            date: row.get("buy_datestamp")?,
+        })
+    }
+}
+
+impl BuyInfo {
+    pub fn from_row(row: &Row) -> Result<Self> {
+        Ok(Self {
+            buy_id: row.get("buy_id")?,
+            code: row.get("bike_or_category")?,
+            category_name: row.get("category_name")?,
+            bike_name: row.get("bike_name")?,
+            tags: row.get("tags")?,
+            name: row.get("buy_name")?,
+            price: row.get("buy_price")?,
+            date: row.get("buy_datestamp")?,
+        })
+    }
+}
+
 impl Ride {
     pub fn from_row(row: &Row) -> Result<Self> {
         Ok(Self {
-            id: row.get(0)?,
-            bike_id: row.get(1)?,
-            datestamp: row.get(2)?,
-            distance: row.get(3)?,
-            abbr: row.get(4)?,
-            id_in_cat: row.get(5)?,
-            tags: row.get(7)?,
-            annotation: row.get(6)?,
+            id: row.get("ride_id")?,
+            bike_id: row.get("bike_id")?,
+            datestamp: row.get("datestamp")?,
+            distance: row.get("distance")?,
+            abbr: row.get("cat")?,
+            id_in_cat: row.get("id_in_cat")?,
+            tags: row.get("tags")?,
+            annotation: row.get("ann")?,
         })
     }
 }

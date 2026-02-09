@@ -6,13 +6,13 @@ use crate::err_exit;
 
 pub fn get_bicycle_types() -> Result<Vec<String>> {
     let conn: Connection = open_connection_with_fk("./bcl.db").unwrap();
-    
+
     let mut stmt = conn.prepare("SELECT abbr FROM category")?;
     let bicycle_types: Vec<String> = stmt
-            .query_map([], |row| row.get(0))
-            .unwrap()
-            .map(|res| res.unwrap())
-            .collect();
+        .query_map([], |row| row.get(0))
+        .unwrap()
+        .map(|res| res.unwrap())
+        .collect();
 
     Ok(bicycle_types)
 }
@@ -62,6 +62,12 @@ pub fn named_parse(mut command: Command, arg: String) -> Command {
         command
             .category
             .set_or_err(Some(key.to_string()), "multiple bike type input.");
+    } else if key.contains("graph") {
+        command.output.set(Some(key.to_string()));
+
+        if !val.is_empty() {
+            command.group_by.set(Some(val.to_string()))
+        };
     } else if !val.is_empty() {
         match key {
             "year" => {

@@ -128,9 +128,9 @@ fn buy(conn: &mut Connection, command: Command, id: u32) -> Result<()> {
     let mut buy: Buy = conn.query_row(
         "SELECT
             b.id AS buy_id,
-            b.name,
-            b.price,
-            b.datestamp,
+            b.name AS name,
+            b.price As price,
+            b.datestamp AS datestamp,
             COALESCE(GROUP_CONCAT(t.name, ', '), '') AS tags
         FROM buy b
         LEFT JOIN tag_to_buy tb ON tb.buy_id = b.id
@@ -259,7 +259,7 @@ fn buy(conn: &mut Connection, command: Command, id: u32) -> Result<()> {
     println!(
         "{}",
         format!(
-            "Buy id:\"{0}\" modified to {1} {2} {3} {4} {5}",
+            "Buy id:{0} modified to {1} \"{3}\" {4} {5} tags:({2})",
             buy.id, &target, buy.tags, buy.name, buy.price, buy.datestamp,
         )
         .blue()
@@ -375,7 +375,13 @@ fn lub(conn: &Connection, command: Command, id: u32) -> Result<()> {
             distance = ?3,
             annotation = ?4
         WHERE id = ?5",
-        params![lub.bike_id, lub.datestamp, lub.distance, lub.annotation, lub.id],
+        params![
+            lub.bike_id,
+            lub.datestamp,
+            lub.distance,
+            lub.annotation,
+            lub.id
+        ],
     )?;
 
     println!(
@@ -415,11 +421,11 @@ fn ride(conn: &mut Connection, command: Command, id: u32) -> Result<()> {
     let mut ride: Ride = conn.query_row(
         "SELECT
             r.id AS ride_id,
-            r.bike_id,
-            r.datestamp,
-            r.distance,
-            c.abbr,
-            b.id_in_cat,
+            r.bike_id AS bike_id,
+            r.datestamp AS datestamp,
+            r.distance AS distance,
+            c.abbr AS cat,
+            b.id_in_cat AS id_in_cat,
             COALESCE(r.annotation, '') AS ann,
             COALESCE(GROUP_CONCAT(t.name, ', '), '') AS tags
         FROM ride r
@@ -533,7 +539,7 @@ fn ride(conn: &mut Connection, command: Command, id: u32) -> Result<()> {
     println!(
         "{}",
         format!(
-            "Ride id:\"{0}\" modified to {1}:{2} {3} {4} {5} {6}",
+            "Ride id:{0} modified to {1}:{2} {3} {4} {5} {6}",
             ride.id,
             ride.abbr,
             ride.id_in_cat,

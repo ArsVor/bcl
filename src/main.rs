@@ -18,6 +18,7 @@ fn main() {
         let conn: Connection = open_connection_with_fk("./bcl.db").unwrap();
         let command: Command = Command::from(args);
         // println!("{:?}", &command);
+        // suc_exit!("Done");
         let funk = command.funk.unwrap();
         let result = match funk.as_str() {
             "add" => handlers::add::route(conn, command),

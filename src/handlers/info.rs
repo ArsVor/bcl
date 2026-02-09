@@ -76,7 +76,12 @@ fn buy(conn: &Connection, command: Command) -> Result<()> {
         1 => output::info::buy_info_single(&buys[0]),
         _ => {
             let report: BuysInfoReport = BuysInfoReport::from(buys, &command);
-            output::info::buy_info(report);
+
+            if command.output.is_none() {
+                output::info::buy_info(report);
+            } else {
+                output::graph::buy_graph(report);
+            }
         }
     }
 
@@ -134,6 +139,7 @@ fn ride(conn: &Connection, command: Command) -> Result<()> {
         unreachable!()
     };
 
+    // println!("Rides: {:?}", &rides);
     match rides.len() {
         0 => {
             suc_exit!("Rides for your request was not found.");
@@ -141,8 +147,12 @@ fn ride(conn: &Connection, command: Command) -> Result<()> {
         1 => output::info::ride_info_single(&rides[0]),
         _ => {
             let report: RidesInfoReport = RidesInfoReport::from(rides, &command);
-            output::info::ride_info(report);
             // println!("{:?}", &report);
+            if command.output.is_none() {
+                output::info::ride_info(report);
+            } else {
+                output::graph::ride_graph(report);
+            };
         }
     }
 

@@ -1,6 +1,7 @@
+use indexmap::IndexMap;
 use std::collections::HashMap;
 
-use chrono::NaiveDate;
+use chrono::{Datelike, NaiveDate};
 
 use crate::{
     cli::structs::Command,
@@ -18,7 +19,7 @@ pub struct BuysInfoReport {
     pub last_price: f32,
     pub last_date: Option<NaiveDate>,
     pub total_spend: f32,
-    pub spend_by_categories: HashMap<String, f32>,
+    pub spend_by_categories: IndexMap<String, f32>,
     pub spend_uncategorized: f32,
 }
 
@@ -33,7 +34,7 @@ pub struct RidesInfoReport {
     pub last_distance: f32,
     pub last_date: Option<NaiveDate>,
     pub total_distance: f32,
-    pub distance_by_categories: HashMap<String, f32>,
+    pub distance_by_categories: IndexMap<String, f32>,
 }
 
 impl BuysInfoReport {
@@ -44,11 +45,11 @@ impl BuysInfoReport {
             date_lt: None,
             date_gt: None,
             target: None,
-            iter_type: String::from("cat"),
+            iter_type: String::from(""),
             last_price: 0.0,
             last_date: None,
             total_spend: 0.0,
-            spend_by_categories: HashMap::new(),
+            spend_by_categories: IndexMap::new(),
             spend_uncategorized: 0.0,
         }
     }
@@ -76,12 +77,33 @@ impl BuysInfoReport {
             }
         }
 
+        if command.output.is_none() && command.bike_id.is_none() {
+            if command.category.is_some() {
+                report.target = Some(buys[0].category_name.clone());
+                report.iter_type = "bike".to_string();
+            } else {
+                report.iter_type = "cat".to_string();
+            }
+        } else if command.bike_id.is_none() {
+            if let Some(period) = command.group_by.get() {
+                match period.as_ref() {
+                    "dayly" => report.iter_type = "dayly".to_string(),
+                    "weekly" => report.iter_type = "weekly".to_string(),
+                    "monthly" => report.iter_type = "monthly".to_string(),
+                    "yearly" => report.iter_type = "yearly".to_string(),
+                    _ => {
+                        unreachable!()
+                    }
+                }
+            } else if command.category.is_some() {
+                report.iter_type = "for bikes".to_string();
+            } else {
+                report.iter_type = "for categories".to_string();
+            }
+        }
+
         if command.bike_id.is_some() {
             report.target = Some(buys[0].bike_name.clone());
-            report.iter_type = "".to_string();
-        } else if command.category.is_some() {
-            report.target = Some(buys[0].category_name.clone());
-            report.iter_type = "bike".to_string();
         }
 
         report.last_price = buys[0].price;
@@ -91,23 +113,47 @@ impl BuysInfoReport {
             report.total_spend += buy.price;
 
             if !report.iter_type.is_empty() {
-                let cat: String = match report.iter_type.as_str() {
-                    "bike" => buy.bike_name,
-                    "cat" => buy.category_name,
-                    _ => {
-                        unreachable!()
-                    }
-                };
+                // println!("ITER_TYPE: {}", &report.iter_type);
+                if !report.iter_type.is_empty() {
+                    let cat: String = match report.iter_type.as_str() {
+                        "bike" => buy.bike_name,
+                        "cat" => buy.category_name,
+                        "for categories" => {
+                            // println!("BUY_CODE: {} ~~", &buy.code);
+                            if !buy.code.is_empty() {
+                                let code: Vec<&str> = buy.code.split(":").collect();
+                                format!("{}:", code[0])
+                            } else {
+                                String::new()
+                            }
+                        }
+                        "for bikes" => {
+                            if buy.code.ends_with(":") {
+                                String::new()
+                            } else {
+                                buy.code
+                            }
+                        }
+                        "dayly" => buy.date.format("%y-%m-%d").to_string(),
+                        "weekly" => buy.date.iso_week().week().to_string(),
+                        "monthly" => buy.date.format("%y-%m").to_string(),
+                        "yearly" => buy.date.year().to_string(),
+                        _ => {
+                            unreachable!()
+                        }
+                    };
 
-                if cat.is_empty() {
-                    report.spend_uncategorized += buy.price;
-                } else if let Some(val) = report.spend_by_categories.get_mut(&cat) {
-                    *val += buy.price;
-                } else {
-                    report.spend_by_categories.insert(cat, buy.price);
+                    if cat.is_empty() {
+                        report.spend_uncategorized += buy.price;
+                    } else if let Some(val) = report.spend_by_categories.get_mut(&cat) {
+                        *val += buy.price;
+                    } else {
+                        report.spend_by_categories.insert(cat, buy.price);
+                    }
                 }
             }
         }
+        println!("REPORT: {:?}", &report);
 
         report
     }
@@ -121,11 +167,11 @@ impl RidesInfoReport {
             date_lt: None,
             date_gt: None,
             target: None,
-            iter_type: String::from("cat"),
+            iter_type: String::from(""),
             last_distance: 0.0,
             last_date: None,
             total_distance: 0.0,
-            distance_by_categories: HashMap::new(),
+            distance_by_categories: IndexMap::new(),
         }
     }
 
@@ -148,12 +194,33 @@ impl RidesInfoReport {
             }
         }
 
+        if command.output.is_none() && command.bike_id.is_none() {
+            if command.category.is_some() {
+                report.target = Some(rides[0].category.clone());
+                report.iter_type = "bike".to_string();
+            } else {
+                report.iter_type = "cat".to_string();
+            }
+        } else if command.bike_id.is_none() {
+            if let Some(period) = command.group_by.get() {
+                match period.as_ref() {
+                    "dayly" => report.iter_type = "dayly".to_string(),
+                    "weekly" => report.iter_type = "weekly".to_string(),
+                    "monthly" => report.iter_type = "monthly".to_string(),
+                    "yearly" => report.iter_type = "yearly".to_string(),
+                    _ => {
+                        unreachable!()
+                    }
+                }
+            } else if command.category.is_some() {
+                report.iter_type = "by bikes".to_string();
+            } else {
+                report.iter_type = "by categories".to_string();
+            }
+        }
+
         if command.bike_id.is_some() {
             report.target = Some(rides[0].bike.clone());
-            report.iter_type = "".to_string();
-        } else if command.category.is_some() {
-            report.target = Some(rides[0].category.clone());
-            report.iter_type = "bike".to_string();
         }
 
         report.last_distance = rides[0].distance;
@@ -166,6 +233,15 @@ impl RidesInfoReport {
                 let cat: String = match report.iter_type.as_str() {
                     "bike" => ride.bike,
                     "cat" => ride.category,
+                    "by categories" => {
+                        let code: Vec<&str> = ride.code.split(":").collect();
+                        format!("{}:", code[0])
+                    }
+                    "by bikes" => ride.code,
+                    "dayly" => ride.date.format("%y-%m-%d").to_string(),
+                    "weekly" => ride.date.iso_week().week().to_string(),
+                    "monthly" => ride.date.format("%y-%m").to_string(),
+                    "yearly" => ride.date.year().to_string(),
                     _ => {
                         unreachable!()
                     }
@@ -178,6 +254,7 @@ impl RidesInfoReport {
                 }
             }
         }
+        println!("REPORT: {:?}", &report);
 
         report
     }
