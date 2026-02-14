@@ -7,9 +7,18 @@ use crate::cli::structs::Command;
 use crate::db::models::{BikeList, BuyList, Category, ChainLubricationList, RideList};
 
 use super::helpers::{self, BuyResult, RideResult};
+use crate::err_exit;
 
 pub fn route(conn: Connection, command: Command) -> Result<()> {
-    let obj = command.object.unwrap();
+    let obj = if let Some(obj) = command.object.get() {
+        obj
+    } else {
+        err_exit!(format!(
+            "Object missed. Try `bcl {} help` for more info.",
+            command.funk.unwrap()
+        ));
+    };
+
     match obj.as_str() {
         "bike" => bike(&conn, command),
         "buy" => buy(&conn, command),
@@ -17,7 +26,9 @@ pub fn route(conn: Connection, command: Command) -> Result<()> {
         "lub" => chain_lub(&conn, command),
         "ride" => ride(&conn, command),
         "tag" => tag(&conn),
-        _ => Ok(()),
+        _ => {
+            err_exit!(format!("Have not OBJECT `{}`. Tyr `bcl list help` for more info.", &command.object.unwrap()));
+        },
     }
 }
 

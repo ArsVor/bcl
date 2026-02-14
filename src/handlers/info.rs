@@ -14,7 +14,15 @@ use crate::{err_exit, suc_exit};
 use super::helpers;
 
 pub fn route(conn: Connection, command: Command) -> Result<()> {
-    let obj: String = command.object.unwrap();
+    let obj = if let Some(obj) = command.object.get() {
+        obj
+    } else {
+        err_exit!(format!(
+            "Object missed. Try `bcl {} help` for more info.",
+            command.funk.unwrap()
+        ));
+    };
+
 
     match obj.as_str() {
         "bike" => bike(&conn, command),

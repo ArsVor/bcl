@@ -7,7 +7,14 @@ use crate::db::queries::{get_bike, get_category, tag_del_if_unused, tag_get_or_c
 use crate::{err_exit, suc_exit};
 
 pub fn rote(mut conn: Connection, command: Command) -> Result<()> {
-    let obj = command.object.unwrap();
+    let obj = if let Some(obj) = command.object.get() {
+        obj
+    } else {
+        err_exit!(format!(
+            "Object missed. Try `bcl {} help` for more info.",
+            command.funk.unwrap()
+        ));
+    };
 
     let _ = match obj.as_str() != "tag" {
         true => {

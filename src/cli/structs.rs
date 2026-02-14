@@ -431,6 +431,10 @@ impl Command {
             err_exit!("Non valid date given.");
         }
 
+        if command.funk.is_none() {
+            err_exit!("Command missed. Try `bcl help` for more info.");
+        }
+
         if command.funk.clone().unwrap() == "info" {
             command.lim = 0;
         }
