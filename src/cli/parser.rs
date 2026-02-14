@@ -1,3 +1,4 @@
+use lazy_regex::regex_is_match;
 use rusqlite::{Connection, Result};
 
 use super::structs::Command;
@@ -117,17 +118,21 @@ pub fn named_parse(mut command: Command, arg: String) -> Command {
                 }
             }
             "id" => {
-                if command.id.is_some() {
-                    err_exit!("Input dynamic id or static id, not both.");
-                }
-                if let Ok(number) = val.parse::<u32>() {
-                    command
-                        .real_id
-                        .set_or_err(Some(number), "multiple static id input");
+                if val.contains(",") || val.contains("..") {
+                    command.multi_absolute_id = multiple_id_pars(val.to_string())
                 } else {
-                    err_exit!(format!(
-                        "Wrong value of '{key}'. Expected int, but given '{val}'"
-                    ));
+                    if command.id.is_some() {
+                        err_exit!("Input # or ID, not both.");
+                    }
+                    if let Ok(number) = val.parse::<u32>() {
+                        command
+                            .absolute_id
+                            .set_or_err(Some(number), "multiple ID input");
+                    } else {
+                        err_exit!(format!(
+                            "Wrong value of '{key}'. Expected int, but given '{val}'"
+                        ));
+                    }
                 }
             }
             _ => {
@@ -146,4 +151,40 @@ pub fn named_parse(mut command: Command, arg: String) -> Command {
     }
 
     command
+}
+
+pub fn multiple_id_pars(val: String) -> Vec<u32> {
+    let coma_parts: Vec<&str> = val.split(",").collect();
+    let mut id_vec: Vec<u32> = vec![];
+
+    fn add_range(range: String, id_vec: &mut Vec<u32>) {
+        let range_splited: Vec<&str> = range.split("..").collect();
+        let start: u32 = range_splited[0].parse().unwrap();
+        let stop: u32 = range_splited[1].parse().unwrap();
+
+        if start > stop {
+            err_exit!(format!(
+                "incorrect id range format. Expected: `min..max`, but {}..{} given",
+                &start, &stop
+            ));
+        }
+
+        for i in start..=stop {
+            id_vec.push(i);
+        }
+    }
+
+    for part in coma_parts {
+        if !part.is_empty() {
+            match part {
+                s if regex_is_match!(r"^\d+\.\.\d+$", s) => add_range(s.to_string(), &mut id_vec),
+                s if regex_is_match!(r"^\d+$", s) => id_vec.push(s.parse().unwrap()),
+                _ => {
+                    err_exit!("incorrect multilpe id syntax");
+                }
+            }
+        }
+    }
+
+    id_vec
 }

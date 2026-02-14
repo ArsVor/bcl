@@ -38,7 +38,14 @@ pub mod get {
     use super::*;
 
     pub fn categories(conn: &Connection) -> Result<Vec<Category>> {
-        let mut stmt = conn.prepare("SELECT * FROM category")?;
+        let mut stmt = conn.prepare(
+            "SELECT
+                c.id as id,
+                c.abbr as abbr,
+                c.name as name,
+                COALESCE((SELECT COUNT(b.id) FROM bike b WHERE b.category_id = c.id), 0) as bike_count
+            FROM category c",
+        )?;
         let category_iter = stmt.query_map([], Category::from_row)?;
 
         let mut categories: Vec<Category> = Vec::new();
@@ -51,11 +58,17 @@ pub mod get {
     }
 
     pub fn category_with_params(conn: &Connection, command: Command) -> Result<Category> {
-        let mut select_sql: String = "SELECT * FROM category".to_string();
+        let mut select_sql: String = "SELECT
+                c.id as id,
+                c.abbr as abbr,
+                c.name as name,
+                COALESCE((SELECT COUNT(b.id) FROM bike b WHERE b.category_id = c.id), 0) as bike_count
+            FROM category c"
+            .to_string();
         let mut where_sql: Vec<String> = vec![];
         let mut dyn_params: Vec<Box<dyn ToSql>> = Vec::new();
 
-        if let Some(id) = command.real_id.get().or(command.id.get()) {
+        if let Some(id) = command.absolute_id.get().or(command.id.get()) {
             where_sql.push(format!("id =?{}", where_sql.len() + 1));
             dyn_params.push(Box::new(id));
         };
@@ -144,9 +157,9 @@ pub mod get {
         let mut where_sql: Vec<String> = vec![];
         let mut dyn_params: Vec<Box<dyn ToSql>> = Vec::new();
 
-        if let Some(real_id) = command.real_id.get() {
+        if let Some(absolute_id) = command.absolute_id.get() {
             where_sql.push(format!("b.id = ?{}", where_sql.len() + 1));
-            dyn_params.push(Box::new(real_id));
+            dyn_params.push(Box::new(absolute_id));
         } else {
             if let Some(category) = command.category.get() {
                 where_sql.push(format!("c.abbr = ?{}", where_sql.len() + 1));
@@ -284,9 +297,9 @@ pub mod get {
         let bike_id: Option<u8> = command.bike_id.get();
         let category: Option<String> = command.category.get();
 
-        if let Some(real_id) = command.real_id.get() {
+        if let Some(absolute_id) = command.absolute_id.get() {
             where_sql.push(format!("b.id = ?{}", where_sql.len() + 1));
-            dyn_params.push(Box::new(real_id));
+            dyn_params.push(Box::new(absolute_id));
         }
 
         if val.is_some() {
@@ -339,8 +352,7 @@ pub mod get {
             select_sql.push_str(&where_sql.join(" AND "));
         }
 
-        select_sql
-            .push_str("GROUP BY b.id, b.name, b.price, b.datestamp ORDER BY b.datestamp");
+        select_sql.push_str("GROUP BY b.id, b.name, b.price, b.datestamp ORDER BY b.datestamp");
 
         if command.funk.unwrap() != "info" {
             select_sql.push_str(" DESC");
@@ -448,9 +460,9 @@ pub mod get {
         let bike_id: Option<u8> = command.bike_id.get();
         let category: Option<String> = command.category.get();
 
-        if let Some(real_id) = command.real_id.get() {
+        if let Some(absolute_id) = command.absolute_id.get() {
             where_sql.push(format!("r.id = ?{}", where_sql.len() + 1));
-            dyn_params.push(Box::new(real_id));
+            dyn_params.push(Box::new(absolute_id));
         }
 
         if val.is_some() {
@@ -604,9 +616,9 @@ pub mod get {
         let bike_id: Option<u8> = command.bike_id.get();
         let category: Option<String> = command.category.get();
 
-        if let Some(real_id) = command.real_id.get() {
+        if let Some(absolute_id) = command.absolute_id.get() {
             where_sql.push(format!("l.id = ?{}", where_sql.len() + 1));
-            dyn_params.push(Box::new(real_id));
+            dyn_params.push(Box::new(absolute_id));
         }
 
         if let Some(date) = date {

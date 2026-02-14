@@ -35,7 +35,7 @@ pub fn route(conn: Connection, command: Command) -> Result<()> {
 }
 
 fn bike(conn: &Connection, command: Command) -> Result<()> {
-    let bike_id: i32 = if let Some(id) = command.real_id.get() {
+    let bike_id: i32 = if let Some(id) = command.absolute_id.get() {
         id as i32
     } else if let Some(id) = command.bike_id.get() {
         if let Some(abbr) = command.category.get() {

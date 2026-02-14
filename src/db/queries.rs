@@ -39,10 +39,17 @@ pub fn get_included_excluded(
 
 pub fn get_category(conn: &Connection, abbr: &str) -> Result<Category> {
     conn.query_row(
-        "SELECT * FROM category WHERE abbr = ?1",
+        "SELECT 
+            c.id as id,
+            c.abbr as abbr,
+            c.name as name,
+            COALESCE((SELECT COUNT(b.id) FROM bike b WHERE b.category_id = c.id), 0) as bike_count
+        FROM category c
+        WHERE abbr = ?1",
         params![abbr],
         Category::from_row,
-    ).map_err(|e| match e {
+    )
+    .map_err(|e| match e {
         rusqlite::Error::QueryReturnedNoRows => {
             err_exit!(format!("category - '{}' does not exist.", &abbr));
         }

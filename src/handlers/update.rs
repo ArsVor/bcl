@@ -18,11 +18,11 @@ pub fn rote(mut conn: Connection, command: Command) -> Result<()> {
 
     let _ = match obj.as_str() != "tag" {
         true => {
-            let id = if let Some(id) = command.real_id.get() {
+            let id = if let Some(id) = command.absolute_id.get() {
                 id
             } else {
                 err_exit!(
-                    "Command params missed.\nExpected: `bcl [dynamic id]/id:[static id]` mod [PARAMS]"
+                    "Command params missed.\nExpected: `bcl [#]/id:[ID]` mod [PARAMS]"
                 );
             };
             match obj.as_str() {
@@ -288,8 +288,12 @@ fn cat(conn: &Connection, command: Command, id: u32) -> Result<()> {
     }
 
     let mut category = conn.query_row(
-        "SELECT *
-        FROM category
+        "SELECT 
+            c.id as id,
+            c.abbr as abbr,
+            c.name as name,
+            COALESCE((SELECT COUNT(b.id) FROM bike b WHERE b.category_id = c.id), 0) as bike_count
+        FROM category c
         WHERE id = ?1",
         params![id],
         Category::from_row,

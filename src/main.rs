@@ -13,12 +13,17 @@ use rusqlite::Connection;
 fn main() {
     let mut args: Vec<String> = args().collect();
     args.remove(0);
-    println!("ARGS: {:?}", &args);
+    // println!("ARGS: {:?}", &args);
     if !args.is_empty() {
         let conn: Connection = open_connection_with_fk("./bcl.db").unwrap();
         let command: Command = Command::from(args);
         // println!("COMMAND: {:?}", &command);
         // suc_exit!("Done");
+
+        if !command.multi_absolute_id.is_empty() && !command.multi_id.is_empty() {
+            err_exit!("Expected relative id set or absolute id set, but given both.");
+        }
+
         let funk = command.funk.unwrap();
         let result = match funk.as_str() {
             "add" => handlers::add::route(conn, command),
@@ -27,7 +32,7 @@ fn main() {
             "info" => handlers::info::route(conn, command),
             "list" => handlers::list::route(conn, command),
             "mod" => {
-                if command.real_id.is_some() || command.object.unwrap_or(String::new()) == "tag" {
+                if command.absolute_id.is_some() || command.object.unwrap_or(String::new()) == "tag" {
                     handlers::update::rote(conn, command)
                 } else {
                     handlers::edit::route(conn, command)
@@ -37,6 +42,7 @@ fn main() {
         };
 
         if let Err(e) = result {
+            println!("OoPS!");
             err_exit!(&e);
         }
         // println!("{:?}", db::queries::get_category(&conn, "G"))

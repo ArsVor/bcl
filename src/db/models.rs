@@ -8,9 +8,14 @@ use tabled::Tabled;
 
 #[derive(Debug, Clone, Tabled)]
 pub struct Category {
+    #[tabled(rename = "ID")]
     pub id: i32,
+    #[tabled(rename = "ABBR")]
     pub abbr: String,
+    #[tabled(rename = "Name")]
     pub name: String,
+    #[tabled(rename = "Bike count")]
+    pub bike_count: i32,
 }
 
 #[derive(Debug, Clone)]
@@ -41,12 +46,19 @@ pub struct Buy {
 
 #[derive(Debug, Clone, Tabled)]
 pub struct BuyList {
+    #[tabled(rename = "#")]
     pub id: i32,
+    #[tabled(rename = "ID")]
     pub buy_id: i32,
+    #[tabled(rename = "Target")]
     pub target: String,
+    #[tabled(rename = "#tags")]
     pub tags: String,
+    #[tabled(rename = "Product")]
     pub name: String,
+    #[tabled(rename = "Price (UAH)", format("{:.2}", self.price))]
     pub price: f32,
+    #[tabled(rename = "Date")]
     pub date: NaiveDate,
 }
 
@@ -90,10 +102,15 @@ pub struct BikeInfo {
 
 #[derive(Debug, Clone, Tabled)]
 pub struct BikeList {
+    #[tabled(rename = "#")]
     pub id: i32,
+    #[tabled(rename = "ID")]
     pub bike_id: i32,
+    #[tabled(rename = "Code")]
     pub code: String,
+    #[tabled(rename = "Name")]
     pub name: String,
+    #[tabled(rename = "Added")]
     pub added: NaiveDate,
 }
 
@@ -123,12 +140,19 @@ pub struct RideInfo {
 
 #[derive(Debug, Clone, Tabled)]
 pub struct RideList {
+    #[tabled(rename = "#")]
     pub id: i32,
+    #[tabled(rename = "ID")]
     pub ride_id: i32,
+    #[tabled(rename = "Bike")]
     pub bike: String,
+    #[tabled(rename = "Date")]
     pub date: NaiveDate,
+    #[tabled(rename = "Distance (km)", format("{:.2}", self.distance))] 
     pub distance: f32,
+    #[tabled(rename = "#tags")]
     pub tags: String,
+    #[tabled(rename = "Annotation")]
     pub annotation: String,
 }
 
@@ -143,11 +167,17 @@ pub struct ChainLubrication {
 
 #[derive(Debug, Clone, Tabled)]
 pub struct ChainLubricationList {
+    #[tabled(rename = "#")]
     pub id: i32,
+    #[tabled(rename = "ID")]
     pub lub_id: i32,
+    #[tabled(rename = "Bike")]
     pub bike: String,
+    #[tabled(rename = "Date")]
     pub date: NaiveDate,
+    #[tabled(rename = "Distance (km)", format("{:.2}", self.passed))]
     pub passed: f32,
+    #[tabled(rename = "Annotation")]
     pub annotation: String,
 }
 
@@ -185,6 +215,7 @@ impl Category {
             id: row.get("id")?,
             abbr: row.get("abbr")?,
             name: row.get("name")?,
+            bike_count: row.get("bike_count")?,
         })
     }
 }
@@ -248,10 +279,10 @@ impl BikeList {
     pub fn from_row(row: &Row) -> Result<Self> {
         Ok(Self {
             id: row.get("row_num")?,
-            bike_id: row.get("id")?,
+            bike_id: row.get("bike_id")?,
             code: row.get("code")?,
-            name: row.get("name")?,
-            added: row.get("datestamp")?,
+            name: row.get("bike_name")?,
+            added: row.get("date")?,
         })
     }
 }

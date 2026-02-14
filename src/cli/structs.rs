@@ -1,4 +1,4 @@
-use super::parser;
+use super::parser::{self, multiple_id_pars};
 use crate::err_exit;
 use chrono::{Datelike, Local, NaiveDate};
 use std::{clone::Clone, collections::HashSet};
@@ -27,7 +27,9 @@ pub struct Command {
     pub lt: Date,
     pub gt: Date,
     pub id: Field<u32>,
-    pub real_id: Field<u32>,
+    pub multi_id: Vec<u32>,
+    pub absolute_id: Field<u32>,
+    pub multi_absolute_id: Vec<u32>,
     pub bike_id: Field<u8>,
     pub val: Field<f32>,
     pub val_lt: Field<f32>,
@@ -327,7 +329,9 @@ impl Command {
             lt: Date::new(),
             gt: Date::new(),
             id: Field::new(),
-            real_id: Field::new(),
+            multi_id: Vec::new(),
+            absolute_id: Field::new(),
+            multi_absolute_id: Vec::new(),
             bike_id: Field::new(),
             val: Field::new(),
             val_lt: Field::new(),
@@ -413,6 +417,9 @@ impl Command {
                     } else {
                         err_exit!(format!("Wrong format. Expected [float]-, but given {}", s));
                     }
+                }
+                s if !s.contains(" ") && (s.contains(",") || s.contains("..")) => {
+                    command.multi_id = multiple_id_pars(s.to_string());
                 }
 
                 _ => {

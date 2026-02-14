@@ -30,12 +30,12 @@ pub fn route(mut conn: Connection, command: Command) -> Result<()> {
 }
 
 fn bike(conn: &Connection, command: Command) -> Result<()> {
-    if command.id.is_none() && command.real_id.is_none() && command.bike_id.is_none() {
-        err_exit!("Command params missed.\nExpected: `bcl del bike id:[stat_id]/[dyn_id] {OPT}`.");
+    if command.id.is_none() && command.absolute_id.is_none() && command.bike_id.is_none() {
+        err_exit!("Command params missed.\nExpected: `bcl del bike id:[ID]/[#] {OPT}`.");
     }
 
-    let id: i32 = if let Some(real_id) = command.real_id.get() {
-        real_id as i32
+    let id: i32 = if let Some(absolute_id) = command.absolute_id.get() {
+        absolute_id as i32
     } else {
         let mut bikes: Vec<BikeList> = helpers::get::bike(conn, command.clone())?;
         let bike: BikeList = if let Some(dyn_id) = command.id.get() {
@@ -70,26 +70,26 @@ fn bike(conn: &Connection, command: Command) -> Result<()> {
 }
 
 fn buy(conn: &mut Connection, command: Command) -> Result<()> {
-    if command.id.is_none() && command.real_id.is_none() {
-        err_exit!("Command params missed.\nExpected: `bcl del buy id:[stat_id]/[dyn_id] {OPT}`.");
+    if command.id.is_none() && command.absolute_id.is_none() {
+        err_exit!("Command params missed.\nExpected: `bcl del buy id:[ID]/[#] {OPT}`.");
     }
 
     let mut tags: Vec<String> = Vec::new();
     let mut deleted_tags: Vec<String> = Vec::new();
 
-    let id: i32 = if let Some(real_id) = command.real_id.get() {
+    let id: i32 = if let Some(absolute_id) = command.absolute_id.get() {
         if let Ok(tags_row) = conn.query_row(
             "SELECT
                 COALESCE(GROUP_CONCAT(t.name, ', '), '') AS tags
             FROM tag_to_buy tb
             JOIN tag t ON t.id = tb.tag_id
             WHERE tb.buy_id = ?1",
-            params![real_id],
+            params![absolute_id],
             |row| row.get::<_, String>(0),
         ) {
             tags.extend(tags_row.split(", ").map(|s| s.to_string()));
         }
-        real_id as i32
+        absolute_id as i32
     } else {
         let dyn_id: usize = command.id.unwrap() as usize;
         let result: BuyResult = helpers::get::buy(conn, command)?;
@@ -130,10 +130,10 @@ fn buy(conn: &mut Connection, command: Command) -> Result<()> {
 }
 
 fn category(conn: &Connection, command: Command) -> Result<()> {
-    let id: i32 = if let Some(id) = command.real_id.get() {
+    let id: i32 = if let Some(id) = command.absolute_id.get() {
         id as i32
     } else {
-        err_exit!("Command params missed.\nExpected: `bcl del cat id:[stat_id]] {OPT}`");
+        err_exit!("Command params missed.\nExpected: `bcl del cat id:[ID]`");
     };
 
     let result = conn.execute("DELETE FROM category WHERE id = ?1", params![id]);
@@ -158,12 +158,12 @@ fn category(conn: &Connection, command: Command) -> Result<()> {
 }
 
 fn chain_lub(conn: &Connection, command: Command) -> Result<()> {
-    if command.id.is_none() && command.real_id.is_none() {
-        err_exit!("Command params missed.\nExpected: `bcl del lub id:[stat_id]/[dyn_id] {OPT}`");
+    if command.id.is_none() && command.absolute_id.is_none() {
+        err_exit!("Command params missed.\nExpected: `bcl del lub id:[ID]/[#] {OPT}`");
     }
 
-    let id: i32 = if let Some(real_id) = command.real_id.get() {
-        real_id as i32
+    let id: i32 = if let Some(absolute_id) = command.absolute_id.get() {
+        absolute_id as i32
     } else {
         let dyn_id: usize = command.id.unwrap() as usize;
         let lubs: Vec<ChainLubricationList> = helpers::get::chain_lub(conn, command)?;
@@ -189,26 +189,26 @@ fn chain_lub(conn: &Connection, command: Command) -> Result<()> {
 }
 
 fn ride(conn: &mut Connection, command: Command) -> Result<()> {
-    if command.id.is_none() && command.real_id.is_none() {
-        err_exit!("Command params missed.\nExpected: `bcl del ride id:[stat_id]/[dyn_id] {OPT}`.");
+    if command.id.is_none() && command.absolute_id.is_none() {
+        err_exit!("Command params missed.\nExpected: `bcl del ride id:[ID]/[#] {OPT}`.");
     }
 
     let mut tags: Vec<String> = Vec::new();
     let mut deleted_tags: Vec<String> = Vec::new();
 
-    let id: i32 = if let Some(real_id) = command.real_id.get() {
+    let id: i32 = if let Some(absolute_id) = command.absolute_id.get() {
         if let Ok(tags_row) = conn.query_row(
             "SELECT
                 COALESCE(GROUP_CONCAT(t.name, ', '), '') AS tags
             FROM tag_to_ride tr
             JOIN tag t ON t.id = tr.tag_id
             WHERE tr.ride_id = ?1",
-            params![real_id],
+            params![absolute_id],
             |row| row.get::<_, String>(0),
         ) {
             tags.extend(tags_row.split(", ").map(|s| s.to_string()));
         }
-        real_id as i32
+        absolute_id as i32
     } else {
         let dyn_id: usize = command.id.unwrap() as usize;
         let result: RideResult = helpers::get::ride(conn, command)?;
@@ -267,6 +267,7 @@ fn tag(conn: &Connection, command: Command) -> Result<()> {
     if tags_to_delete.is_empty() {
         suc_exit!("Nothing to do!");
     }
+    println!("TAGS TO DELEE: {:?}", &tags_to_delete);
 
     let del_all: bool;
 
