@@ -32,7 +32,8 @@ fn main() {
             "info" => handlers::info::route(conn, command),
             "list" => handlers::list::route(conn, command),
             "mod" => {
-                if command.absolute_id.is_some() || command.object.unwrap_or(String::new()) == "tag" {
+                if command.absolute_id.is_some() || command.object.unwrap_or(String::new()) == "tag"
+                {
                     handlers::update::rote(conn, command)
                 } else {
                     handlers::edit::route(conn, command)

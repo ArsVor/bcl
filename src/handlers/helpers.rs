@@ -24,7 +24,6 @@ pub enum RideResult {
     Info(Vec<RideInfo>),
 }
 
-
 pub fn tags_diff(s1: &str, s2: &str) -> HashSet<String> {
     let set1: HashSet<String> = s1.split(", ").map(|s| s.to_string()).collect();
     let set2: HashSet<String> = s2.split(", ").map(|s| s.to_string()).collect();
@@ -33,6 +32,7 @@ pub fn tags_diff(s1: &str, s2: &str) -> HashSet<String> {
 
 pub fn clean_id(conn: &Connection, command: &mut Command, obj: &str) -> Result<()> {
     let mut virtual_command: Command = command.clone();
+    virtual_command.lim = 0;
 
     if !command.multi_absolute_id.is_empty() {
         virtual_command.cleaned_id = command.multi_absolute_id.clone();
@@ -43,82 +43,80 @@ pub fn clean_id(conn: &Connection, command: &mut Command, obj: &str) -> Result<(
             .into_iter()
             .map(|item| item.bike_id as u32)
             .collect(),
-        "buy" => {
-            match get::buy(conn, virtual_command)? {
-                BuyResult::List(items) => items
-                    .into_iter()
-                    .map(|item| item.self_id as u32)
-                    .collect(),
+        "buy" => match get::buy(conn, virtual_command)? {
+            BuyResult::List(items) => items.into_iter().map(|item| item.self_id as u32).collect(),
 
-                BuyResult::Info(items) => items
-                    .into_iter()
-                    .map(|item| item.buy_id as u32)
-                    .collect(),
-            }
+            BuyResult::Info(items) => items.into_iter().map(|item| item.buy_id as u32).collect(),
         },
         "cat" => {
             if virtual_command.cleaned_id.is_empty() {
                 err_exit!("ID called only!");
             } else {
                 get::categories_with_id(conn, virtual_command)?
-                .into_iter()
-                .map(|item| item.id as u32)
-                .collect()
+                    .into_iter()
+                    .map(|item| item.id as u32)
+                    .collect()
             }
-        },
+        }
         "lub" => get::chain_lub(conn, virtual_command)?
             .into_iter()
             .map(|item| item.lub_id as u32)
             .collect(),
-        "ride" => {
-            match get::ride(conn, virtual_command)? {
-                RideResult::List(items) => items
-                    .into_iter()
-                    .map(|item| item.ride_id as u32)
-                    .collect(),
+        "ride" => match get::ride(conn, virtual_command)? {
+            RideResult::List(items) => items.into_iter().map(|item| item.ride_id as u32).collect(),
 
-                RideResult::Info(items) => items
-                    .into_iter()
-                    .map(|item| item.ride_id as u32)
-                    .collect(),
-            }
+            RideResult::Info(items) => items.into_iter().map(|item| item.ride_id as u32).collect(),
         },
         "tag" => {
             err_exit!("Name called only!");
-        },
+        }
         _ => {
             err_exit!(format!("Unknown obj: {}", &obj));
-        },
+        }
     };
 
-    if !command.multi_absolute_id.is_empty() {
+    command.cleaned_id = match (command.multi_absolute_id.is_empty(), command.multi_id.is_empty()) {
+        (false, _) => {
+            let cleaned_set: HashSet<u32> = id_vec.iter().copied().collect();
 
-        let cleaned_set: HashSet<u32> = id_vec.iter().copied().collect();
-
-        for id in &command.multi_absolute_id {
-            if !cleaned_set.contains(id) {
-                warn!(format!("`{}` with ID: {} - don't exist in this query. Skipped!", &obj, &id ));
-            } 
-        }
-        command.cleaned_id = id_vec;
-    } else {
-        let id_vec_len: u32 = id_vec.len() as u32; 
-        let mut cleaned_id: Vec<u32> = vec![];
-
-        for id in command.multi_id.clone() {
-            if id > id_vec_len {
-                warn!(format!("`{}` with #: {} - don't exist in this query. Skipped!", obj, &id ));
-            } else {
-                cleaned_id.push(id_vec[id as usize -1]);
+            for id in &command.multi_absolute_id {
+                if !cleaned_set.contains(id) {
+                    warn!(format!(
+                        "`{}` with ID: {} - don't exist in this query. Skipped!",
+                        &obj, &id
+                    ));
+                }
             }
-        }
 
-        command.cleaned_id = cleaned_id;
-        // println!("cleaned_id: {:?}", &command.cleaned_id);
-    }
+            id_vec
+        },
+        (true, false) => {
+            let id_vec_len: u32 = id_vec.len() as u32;
+            let mut cleaned_id: Vec<u32> = vec![];
+
+            for id in command.multi_id.clone() {
+                if id > id_vec_len {
+                    warn!(format!(
+                        "`{}` with #: {} - don't exist in this query. Skipped!",
+                        obj, &id
+                    ));
+                } else {
+                    cleaned_id.push(id_vec[id as usize - 1]);
+                }
+            }
+
+            cleaned_id
+        },
+        (true, true) => {
+            id_vec
+        }
+    };
+    println!("cleaned_id: {:?}", &command.cleaned_id);
 
     if command.cleaned_id.is_empty() {
         suc_exit!("Nothing to do!")
+    } else {
+        command.cleaned_id.sort();
     }
 
     Ok(())
@@ -279,6 +277,7 @@ pub mod get {
         "
         .to_string();
         let mut where_sql: Vec<String> = vec![];
+        let mut where_sql_id: Vec<String> = vec![];
         let mut dyn_params: Vec<Box<dyn ToSql>> = Vec::new();
 
         if let Some(absolute_id) = command.absolute_id.get() {
@@ -302,9 +301,23 @@ pub mod get {
             }
         }
 
-        if !where_sql.is_empty() {
+        for id in command.cleaned_id {
+            where_sql_id.push(format!("b.id = ?{}", where_sql.len() + where_sql_id.len() + 1));
+            dyn_params.push(Box::new(id));
+        }
+
+        if !where_sql.is_empty() || !where_sql_id.is_empty() {
             select_sql.push_str(" WHERE ");
             select_sql.push_str(&where_sql.join(" AND "));
+
+            if !where_sql_id.is_empty() {
+                if !where_sql.is_empty() {
+                    select_sql.push_str(" AND");
+                }
+                select_sql.push_str(" ( ");
+                select_sql.push_str(&where_sql_id.join(" OR "));
+                select_sql.push_str(" ) ");
+            }
         }
 
         select_sql.push_str("GROUP BY b.id ORDER BY c.id");
@@ -395,6 +408,7 @@ pub mod get {
         .to_string();
 
         let mut where_sql: Vec<String> = vec![];
+        let mut where_sql_id: Vec<String> = vec![];
         let mut dyn_params: Vec<Box<dyn ToSql>> = Vec::new();
         let mut date: Option<NaiveDate> = None;
         let mut date_lt: Option<NaiveDate> = None;
@@ -471,9 +485,23 @@ pub mod get {
             dyn_params.push(Box::new(format!("%{}%", &name)));
         }
 
-        if !where_sql.is_empty() {
+        for id in command.cleaned_id.clone() {
+            where_sql_id.push(format!("b.id = ?{}", where_sql.len() + where_sql_id.len() + 1));
+            dyn_params.push(Box::new(id));
+        }
+
+        if !where_sql.is_empty() || !where_sql_id.is_empty() {
             select_sql.push_str(" WHERE ");
             select_sql.push_str(&where_sql.join(" AND "));
+
+            if !where_sql_id.is_empty() {
+                if !where_sql.is_empty() {
+                    select_sql.push_str(" AND");
+                }
+                select_sql.push_str(" ( ");
+                select_sql.push_str(&where_sql_id.join(" OR "));
+                select_sql.push_str(" ) ");
+            }
         }
 
         select_sql.push_str("GROUP BY b.id, b.name, b.price, b.datestamp ORDER BY b.datestamp");
@@ -558,6 +586,7 @@ pub mod get {
         .to_string();
 
         let mut where_sql: Vec<String> = vec![];
+        let mut where_sql_id: Vec<String> = vec![];
         let mut dyn_params: Vec<Box<dyn ToSql>> = Vec::new();
         let mut date: Option<NaiveDate> = None;
         let mut date_lt: Option<NaiveDate> = None;
@@ -634,9 +663,23 @@ pub mod get {
             dyn_params.push(Box::new(format!("%{}%", &name)));
         }
 
-        if !where_sql.is_empty() {
+        for id in command.cleaned_id.clone() {
+            where_sql_id.push(format!("r.id = ?{}", where_sql.len() + where_sql_id.len() + 1));
+            dyn_params.push(Box::new(id));
+        }
+
+        if !where_sql.is_empty() || !where_sql_id.is_empty() {
             select_sql.push_str(" WHERE ");
             select_sql.push_str(&where_sql.join(" AND "));
+
+            if !where_sql_id.is_empty() {
+                if !where_sql.is_empty() {
+                    select_sql.push_str(" AND");
+                }
+                select_sql.push_str(" ( ");
+                select_sql.push_str(&where_sql_id.join(" OR "));
+                select_sql.push_str(" ) ");
+            }
         }
 
         select_sql.push_str("GROUP BY r.id ORDER BY r.datestamp");
@@ -718,6 +761,7 @@ pub mod get {
         .to_string();
 
         let mut where_sql: Vec<String> = vec![];
+        let mut where_sql_id: Vec<String> = vec![];
         let mut dyn_params: Vec<Box<dyn ToSql>> = Vec::new();
         let mut date: Option<NaiveDate> = None;
         let mut date_lt: Option<NaiveDate> = None;
@@ -776,10 +820,25 @@ pub mod get {
             dyn_params.push(Box::new(format!("%{}%", &name)));
         }
 
-        if !where_sql.is_empty() {
+        for id in command.cleaned_id.clone() {
+            where_sql_id.push(format!("l.id = ?{}", where_sql.len() + where_sql_id.len() + 1));
+            dyn_params.push(Box::new(id));
+        }
+
+        if !where_sql.is_empty() || !where_sql_id.is_empty() {
             select_sql.push_str(" WHERE ");
             select_sql.push_str(&where_sql.join(" AND "));
+
+            if !where_sql_id.is_empty() {
+                if !where_sql.is_empty() {
+                    select_sql.push_str(" AND");
+                }
+                select_sql.push_str(" ( ");
+                select_sql.push_str(&where_sql_id.join(" OR "));
+                select_sql.push_str(" ) ");
+            }
         }
+
         select_sql.push_str("GROUP BY l.id ORDER BY l.datestamp DESC");
         if command.lim > 0 {
             select_sql.push_str(&format!(" LIMIT {}", &command.lim));
