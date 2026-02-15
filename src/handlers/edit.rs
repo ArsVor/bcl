@@ -187,7 +187,7 @@ fn buy(conn: &mut Connection, command: Command) -> Result<()> {
         if let Some(b_id) = bike_id {
             if let Ok(btb_id) = tx.query_row(
                 "SELECT id FROM buy_to_bike WHERE buy_id = ?1",
-                params![buy.buy_id],
+                params![buy.self_id],
                 |row| row.get::<_, i32>(0),
             ) {
                 tx.execute(
@@ -199,20 +199,20 @@ fn buy(conn: &mut Connection, command: Command) -> Result<()> {
             } else {
                 tx.execute(
                     "INSERT INTO buy_to_bike (buy_id, bike_id) VALUES (?1, ?2)",
-                    params![buy.buy_id, b_id],
+                    params![buy.self_id, b_id],
                 )?;
             }
         } else {
             tx.execute(
                 "DELETE FROM buy_to_bike WHERE buy_id = ?1",
-                params![buy.buy_id],
+                params![buy.self_id],
             )?;
         };
 
         if let Some(c_id) = category_id {
             if let Ok(btc_id) = tx.query_row(
                 "SELECT id FROM buy_to_category WHERE buy_id = ?1",
-                params![buy.buy_id],
+                params![buy.self_id],
                 |row| row.get::<_, i32>(0),
             ) {
                 tx.execute(
@@ -224,13 +224,13 @@ fn buy(conn: &mut Connection, command: Command) -> Result<()> {
             } else {
                 tx.execute(
                     "INSERT INTO buy_to_category (buy_id, category_id) VALUES (?1, ?2)",
-                    params![buy.buy_id, c_id],
+                    params![buy.self_id, c_id],
                 )?;
             }
         } else {
             tx.execute(
                 "DELETE FROM buy_to_category WHERE buy_id = ?1",
-                params![buy.buy_id],
+                params![buy.self_id],
             )?;
         }
     }
@@ -242,7 +242,7 @@ fn buy(conn: &mut Connection, command: Command) -> Result<()> {
             price = ?2,
             datestamp = ?3
         WHERE id = ?4",
-        params![buy.name, buy.price, buy.date, buy.buy_id],
+        params![buy.name, buy.price, buy.date, buy.self_id],
     )?;
 
     tx.commit()?;
@@ -256,7 +256,7 @@ fn buy(conn: &mut Connection, command: Command) -> Result<()> {
                 let tag_id = tag_get_or_create(conn, tag_name.as_str())?;
                 conn.execute(
                     "INSERT INTO tag_to_buy (tag_id, buy_id) VALUES (?1, ?2)",
-                    params![tag_id, buy.buy_id],
+                    params![tag_id, buy.self_id],
                 )?;
             }
         }
@@ -270,7 +270,7 @@ fn buy(conn: &mut Connection, command: Command) -> Result<()> {
                 ) {
                     conn.execute(
                         "DELETE FROM tag_to_buy WHERE tag_id = ?1 AND buy_id = ?2",
-                        params![tag_id, buy.buy_id],
+                        params![tag_id, buy.self_id],
                     )?;
                 }
                 if let Some(tag_name) = tag_del_if_unused(conn, tag_name.as_str())? {
@@ -284,7 +284,7 @@ fn buy(conn: &mut Connection, command: Command) -> Result<()> {
         "{}",
         format!(
             "Buy - id:\"{0}\" modified to {1} {2} \"{3}\" {4} {5}",
-            buy.buy_id, buy.target, &tags_str, buy.name, buy.price, buy.date,
+            buy.self_id, buy.target, &tags_str, buy.name, buy.price, buy.date,
         )
         .blue()
     );

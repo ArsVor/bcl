@@ -396,8 +396,8 @@ pub mod get {
                     let mut num = 1;
                     for buy_result in buys_iter {
                         let mut buy: BuyList = buy_result?;
-                        if (include_id.contains(&buy.buy_id) || include_id.is_empty())
-                            && !exclude_id.contains(&buy.buy_id)
+                        if (include_id.contains(&buy.self_id) || include_id.is_empty())
+                            && !exclude_id.contains(&buy.self_id)
                         {
                             buy.id = num;
                             num += 1;
@@ -724,8 +724,8 @@ pub mod editor {
     pub fn edit_buy(mut buy: BuyList) -> std::io::Result<BuyList> {
         let mut tmp = NamedTempFile::new()?;
 
-        writeln!(tmp, "id: {}", buy.id)?;
-        writeln!(tmp, "buy_id: {}", buy.buy_id)?;
+        writeln!(tmp, "#: {}", buy.id)?;
+        writeln!(tmp, "ID: {}", buy.self_id)?;
         writeln!(tmp, "target: {}", buy.target)?;
         writeln!(tmp, "tags: {}", buy.tags)?;
         writeln!(tmp, "name: {}", buy.name)?;

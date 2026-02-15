@@ -49,7 +49,7 @@ pub struct BuyList {
     #[tabled(rename = "#")]
     pub id: i32,
     #[tabled(rename = "ID")]
-    pub buy_id: i32,
+    pub self_id: i32,
     #[tabled(rename = "Target")]
     pub target: String,
     #[tabled(rename = "#tags")]
@@ -148,7 +148,7 @@ pub struct RideList {
     pub bike: String,
     #[tabled(rename = "Date")]
     pub date: NaiveDate,
-    #[tabled(rename = "Distance (km)", format("{:.2}", self.distance))] 
+    #[tabled(rename = "Distance (km)", format("{:.2}", self.distance))]
     pub distance: f32,
     #[tabled(rename = "#tags")]
     pub tags: String,
@@ -303,7 +303,7 @@ impl BuyList {
     pub fn from_row(row: &Row) -> Result<Self> {
         Ok(Self {
             id: 0,
-            buy_id: row.get("buy_id")?,
+            self_id: row.get("buy_id")?,
             target: row.get("bike_or_category")?,
             tags: row.get("tags")?,
             name: row.get("buy_name")?,

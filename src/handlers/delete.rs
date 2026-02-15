@@ -104,7 +104,7 @@ fn buy(conn: &mut Connection, command: Command) -> Result<()> {
             err_exit!("buy for your request was not found.");
         });
         tags.extend(buy.tags.split(", ").map(|s| s.to_string()));
-        buy.buy_id
+        buy.self_id
     };
 
     conn.execute("DELETE FROM buy WHERE id = ?1", params![id])?;
