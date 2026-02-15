@@ -24,10 +24,38 @@ pub enum RideResult {
     Info(Vec<RideInfo>),
 }
 
+
 pub fn tags_diff(s1: &str, s2: &str) -> HashSet<String> {
     let set1: HashSet<String> = s1.split(", ").map(|s| s.to_string()).collect();
     let set2: HashSet<String> = s2.split(", ").map(|s| s.to_string()).collect();
     set1.difference(&set2).map(|s| s.to_string()).collect()
+}
+
+pub fn clean_id(conn: &Connection, command: &mut Command, obj: &str) -> Result<()> {
+    let mut virtual_command: Command = command.clone();
+    virtual_command.cleaned_id = command.multi_absolute_id.clone();
+
+    let cleaned_id: Vec<u32> = match obj {
+        "bike" => get::bike(conn, virtual_command)?
+            .into_iter()
+            .map(|item| item.bike_id as u32)
+            .collect(),
+        // "buy" => buy(&mut conn, command),
+        // "cat" => category(&conn, command),
+        // "lub" => chain_lub(&conn, command),
+        // "ride" => ride(&mut conn, command),
+        // "tag" => tag(&conn, command),
+        _ => panic!("Unknown obj. OoPS!!!"),
+    };
+    let cleaned_set: HashSet<u32> = cleaned_id.iter().copied().collect();
+
+    for id in &command.multi_absolute_id {
+        if !cleaned_set.contains(id) {
+            println!("ID: {} don't exist in this query. Skipped!", &id );
+        } 
+    }
+    command.cleaned_id = cleaned_id;
+    Ok(())
 }
 
 pub mod get {
@@ -724,8 +752,8 @@ pub mod editor {
     pub fn edit_buy(mut buy: BuyList) -> std::io::Result<BuyList> {
         let mut tmp = NamedTempFile::new()?;
 
-        writeln!(tmp, "#: {}", buy.id)?;
-        writeln!(tmp, "ID: {}", buy.self_id)?;
+        writeln!(tmp, "id: {}", buy.id)?;
+        writeln!(tmp, "buy_id: {}", buy.self_id)?;
         writeln!(tmp, "target: {}", buy.target)?;
         writeln!(tmp, "tags: {}", buy.tags)?;
         writeln!(tmp, "name: {}", buy.name)?;
