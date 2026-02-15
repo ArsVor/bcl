@@ -9,9 +9,17 @@ macro_rules! err_exit {
 
 #[macro_export]
 macro_rules! suc_exit {
-    ($msg:expr) => {
+    ($msg:expr) => {{
         use owo_colors::OwoColorize;
         println!("{}", format!("{}: {}", "WARNING".yellow(), $msg));
         std::process::exit(0)
-    };
+    }};
+}
+
+#[macro_export]
+macro_rules! warn {
+    ($msg:expr) => {{
+        use owo_colors::OwoColorize;
+        println!("{}", format!("{}: {}", "WARNING".yellow(), $msg));
+    }};
 }

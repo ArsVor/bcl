@@ -12,7 +12,7 @@ use crate::db::models::{
     BikeList, BuyInfo, BuyList, Category, ChainLubricationList, RideInfo, RideList,
 };
 use crate::db::queries::get_included_excluded;
-use crate::err_exit;
+use crate::{err_exit, suc_exit, warn};
 
 pub enum BuyResult {
     List(Vec<BuyList>),
@@ -33,28 +33,94 @@ pub fn tags_diff(s1: &str, s2: &str) -> HashSet<String> {
 
 pub fn clean_id(conn: &Connection, command: &mut Command, obj: &str) -> Result<()> {
     let mut virtual_command: Command = command.clone();
-    virtual_command.cleaned_id = command.multi_absolute_id.clone();
 
-    let cleaned_id: Vec<u32> = match obj {
+    if !command.multi_absolute_id.is_empty() {
+        virtual_command.cleaned_id = command.multi_absolute_id.clone();
+    }
+
+    let id_vec: Vec<u32> = match obj {
         "bike" => get::bike(conn, virtual_command)?
             .into_iter()
             .map(|item| item.bike_id as u32)
             .collect(),
-        // "buy" => buy(&mut conn, command),
-        // "cat" => category(&conn, command),
-        // "lub" => chain_lub(&conn, command),
-        // "ride" => ride(&mut conn, command),
-        // "tag" => tag(&conn, command),
-        _ => panic!("Unknown obj. OoPS!!!"),
-    };
-    let cleaned_set: HashSet<u32> = cleaned_id.iter().copied().collect();
+        "buy" => {
+            match get::buy(conn, virtual_command)? {
+                BuyResult::List(items) => items
+                    .into_iter()
+                    .map(|item| item.self_id as u32)
+                    .collect(),
 
-    for id in &command.multi_absolute_id {
-        if !cleaned_set.contains(id) {
-            println!("ID: {} don't exist in this query. Skipped!", &id );
-        } 
+                BuyResult::Info(items) => items
+                    .into_iter()
+                    .map(|item| item.buy_id as u32)
+                    .collect(),
+            }
+        },
+        "cat" => {
+            if virtual_command.cleaned_id.is_empty() {
+                err_exit!("ID called only!");
+            } else {
+                get::categories_with_id(conn, virtual_command)?
+                .into_iter()
+                .map(|item| item.id as u32)
+                .collect()
+            }
+        },
+        "lub" => get::chain_lub(conn, virtual_command)?
+            .into_iter()
+            .map(|item| item.lub_id as u32)
+            .collect(),
+        "ride" => {
+            match get::ride(conn, virtual_command)? {
+                RideResult::List(items) => items
+                    .into_iter()
+                    .map(|item| item.ride_id as u32)
+                    .collect(),
+
+                RideResult::Info(items) => items
+                    .into_iter()
+                    .map(|item| item.ride_id as u32)
+                    .collect(),
+            }
+        },
+        "tag" => {
+            err_exit!("Name called only!");
+        },
+        _ => {
+            err_exit!(format!("Unknown obj: {}", &obj));
+        },
+    };
+
+    if !command.multi_absolute_id.is_empty() {
+
+        let cleaned_set: HashSet<u32> = id_vec.iter().copied().collect();
+
+        for id in &command.multi_absolute_id {
+            if !cleaned_set.contains(id) {
+                warn!(format!("`{}` with ID: {} - don't exist in this query. Skipped!", &obj, &id ));
+            } 
+        }
+        command.cleaned_id = id_vec;
+    } else {
+        let id_vec_len: u32 = id_vec.len() as u32; 
+        let mut cleaned_id: Vec<u32> = vec![];
+
+        for id in command.multi_id.clone() {
+            if id > id_vec_len {
+                warn!(format!("`{}` with #: {} - don't exist in this query. Skipped!", obj, &id ));
+            } else {
+                cleaned_id.push(id_vec[id as usize -1]);
+            }
+        }
+
+        command.cleaned_id = cleaned_id;
+        // println!("cleaned_id: {:?}", &command.cleaned_id);
     }
-    command.cleaned_id = cleaned_id;
+
+    if command.cleaned_id.is_empty() {
+        suc_exit!("Nothing to do!")
+    }
+
     Ok(())
 }
 
@@ -81,6 +147,36 @@ pub mod get {
         for category in category_iter {
             categories.push(category?);
         }
+
+        Ok(categories)
+    }
+
+    pub fn categories_with_id(conn: &Connection, command: Command) -> Result<Vec<Category>> {
+        let mut select_sql: String = "SELECT
+                c.id as id,
+                c.abbr as abbr,
+                c.name as name,
+                COALESCE((SELECT COUNT(b.id) FROM bike b WHERE b.category_id = c.id), 0) as bike_count
+            FROM category c"
+            .to_string();
+        let mut where_sql: Vec<String> = vec![];
+        let mut dyn_params: Vec<Box<dyn ToSql>> = Vec::new();
+
+        for id in command.cleaned_id {
+            where_sql.push(format!("id =?{}", where_sql.len() + 1));
+            dyn_params.push(Box::new(id));
+        }
+
+        select_sql.push_str(" WHERE ");
+        select_sql.push_str(&where_sql.join(" OR "));
+
+        let mut stmt = conn.prepare(&select_sql)?;
+        let categories: Vec<Category> = stmt
+            .query_map(
+                params_from_iter(dyn_params.iter().map(|b| b.as_ref())),
+                Category::from_row,
+            )?
+            .collect::<Result<Vec<_>, _>>()?;
 
         Ok(categories)
     }

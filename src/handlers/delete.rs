@@ -8,7 +8,7 @@ use crate::{err_exit, suc_exit};
 
 use super::helpers::{self, BuyResult, RideResult};
 
-pub fn route(mut conn: Connection, command: Command) -> Result<()> {
+pub fn route(mut conn: Connection, mut command: Command) -> Result<()> {
     let obj = if let Some(obj) = command.object.get() {
         obj
     } else {
@@ -17,6 +17,9 @@ pub fn route(mut conn: Connection, command: Command) -> Result<()> {
             command.funk.unwrap()
         ));
     };
+
+    helpers::clean_id(&conn, &mut command, obj.as_str());
+    suc_exit!(format!("CLEANED ID: {:?}", command.cleaned_id));
 
     match obj.as_str() {
         "bike" => bike(&conn, command),
