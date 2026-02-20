@@ -99,7 +99,7 @@ pub fn tag_get_or_create_tx(tx: &Transaction, tag_name: &str) -> Result<i32> {
     Ok(tx.last_insert_rowid() as i32)
 }
 
-pub fn tag_del_if_unused(conn: &mut Connection) -> Result<Vec<String>> {
+pub fn delete_unused_tags(conn: &mut Connection) -> Result<Vec<String>> {
     let mut deleted_tags: Vec<String> = vec![];
     let mut stmt = conn.prepare(
         "SELECT t.name

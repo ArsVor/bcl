@@ -3,7 +3,7 @@ use rusqlite::{Connection, Result, ToSql, params, params_from_iter};
 
 use crate::cli::structs::Command;
 use crate::db::models::{BikeList, BuyList, ChainLubricationList, RideList};
-use crate::db::queries::tag_del_if_unused;
+use crate::db::queries::delete_unused_tags;
 use crate::{err_exit, suc_exit};
 
 use super::helpers::{self, BuyResult, RideResult};
@@ -112,7 +112,7 @@ fn buy(conn: &mut Connection, command: Command) -> Result<()> {
         params_from_iter(dyn_params.iter().map(|b| b.as_ref()))
     );
 
-    let deleted_tags: Vec<String> = tag_del_if_unused(conn)?;
+    let deleted_tags: Vec<String> = delete_unused_tags(conn)?;
 
     println!(
         "{}", 
@@ -215,7 +215,7 @@ fn ride(conn: &mut Connection, command: Command) -> Result<()> {
         params_from_iter(dyn_params.iter().map(|b| b.as_ref()))
     );
 
-    let deleted_tags: Vec<String> = tag_del_if_unused(conn)?;
+    let deleted_tags: Vec<String> = delete_unused_tags(conn)?;
 
     println!(
         "{}",
