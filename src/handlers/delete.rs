@@ -17,21 +17,30 @@ pub fn route(mut conn: Connection, mut command: Command) -> Result<()> {
         ));
     };
 
-    // if command.raw_self_id.is_empty() && command.raw_hash_id.is_empty() && command.bike_id.is_none()
-    // {
-    //     match obj.as_str() {
-    //         "tag" => {}
-    //         "cat" => {
-    //             err_exit!("Command params missed.\nExpected: `bcl del cat id:[ID]`");
-    //         }
-    //         _ => {
-    //             err_exit!(format!(
-    //                 "Command params missed.\nExpected: `bcl del {} id:[ID]/[#] {}`.",
-    //                 &obj, "{OPT}"
-    //             ));
-    //         }
-    //     }
-    // };
+    if command.raw_self_id.is_empty() {
+        match obj.as_str() {
+            "bike" => {
+                if command.bike_id.is_none() {
+                    err_exit!(format!(
+                        "Command params missed.\nExpected: `bcl del {} id:[ID]/[#]/[Code] {}`.",
+                        &obj, "{OPT}"
+                    ));
+                }
+            }
+            "cat" => {
+                err_exit!("Command params missed.\nExpected: `bcl del cat id:[ID]`");
+            }
+            "tag" => {}
+            _ => {
+                if command.raw_hash_id.is_empty() {
+                    err_exit!(format!(
+                        "Command params missed.\nExpected: `bcl del {} id:[ID]/[#] {}`.",
+                        &obj, "{OPT}"
+                    ));
+                }
+            }
+        }
+    };
 
     _ = helpers::clean_id(&conn, &mut command, obj.as_str());
     // suc_exit!(format!("CLEANED ID: {:?}", command.cleaned_id));
