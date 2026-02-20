@@ -27,10 +27,10 @@ pub struct Command {
     pub lt: Date,
     pub gt: Date,
     pub id: Field<u32>,
-    pub cleaned_id: Vec<u32>,
-    pub multi_id: Vec<u32>,
     pub absolute_id: Field<u32>,
-    pub multi_absolute_id: Vec<u32>,
+    pub cleaned_id: Vec<u32>,
+    pub raw_hash_id: Vec<u32>,
+    pub raw_self_id: Vec<u32>,
     pub bike_id: Field<u8>,
     pub val: Field<f32>,
     pub val_lt: Field<f32>,
@@ -330,15 +330,15 @@ impl Command {
             lt: Date::new(),
             gt: Date::new(),
             id: Field::new(),
-            cleaned_id: Vec::new(),
-            multi_id: Vec::new(),
             absolute_id: Field::new(),
-            multi_absolute_id: Vec::new(),
+            cleaned_id: Vec::new(),
+            raw_hash_id: Vec::new(),
+            raw_self_id: Vec::new(),
             bike_id: Field::new(),
             val: Field::new(),
             val_lt: Field::new(),
             val_gt: Field::new(),
-            lim: 10,
+            lim: 15,
             include_tags: HashSet::new(),
             exclude_tags: HashSet::new(),
         }
@@ -348,7 +348,7 @@ impl Command {
         let mut command: Command = Command::new();
 
         if let Ok(number) = args[0].parse::<u32>() {
-            command.id.set(Some(number));
+            command.raw_hash_id.push(number);
             args.remove(0);
         }
 
@@ -421,7 +421,14 @@ impl Command {
                     }
                 }
                 s if !s.contains(" ") && (s.contains(",") || s.contains("..")) => {
-                    command.multi_id = multiple_id_pars(s.to_string());
+                    if command.id.is_some()
+                        || !command.raw_hash_id.is_empty()
+                        || !command.raw_self_id.is_empty()
+                    {
+                        err_exit!("Input # or ID, not both.");
+                    }
+
+                    command.raw_hash_id = multiple_id_pars(s.to_string());
                 }
 
                 _ => {

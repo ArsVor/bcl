@@ -18,8 +18,20 @@ pub fn route(mut conn: Connection, mut command: Command) -> Result<()> {
         ));
     };
 
-    helpers::clean_id(&conn, &mut command, obj.as_str());
-    suc_exit!(format!("CLEANED ID: {:?}", command.cleaned_id));
+    if command.raw_self_id.is_empty() && command.raw_hash_id.is_empty() && command.bike_id.is_none() {
+        match obj.as_str() {
+            "tag" => {},
+            "cat" => {
+                err_exit!("Command params missed.\nExpected: `bcl del cat id:[ID]`");
+            },
+            _ => {
+                err_exit!(format!("Command params missed.\nExpected: `bcl del {} id:[ID]/[#] {}`.", &obj, "{OPT}"));
+            }
+        }
+    };
+
+    _ = helpers::clean_id(&conn, &mut command, obj.as_str());
+    // suc_exit!(format!("CLEANED ID: {:?}", command.cleaned_id));
 
     match obj.as_str() {
         "bike" => bike(&conn, command),
@@ -33,38 +45,45 @@ pub fn route(mut conn: Connection, mut command: Command) -> Result<()> {
 }
 
 fn bike(conn: &Connection, command: Command) -> Result<()> {
-    if command.id.is_none() && command.absolute_id.is_none() && command.bike_id.is_none() {
-        err_exit!("Command params missed.\nExpected: `bcl del bike id:[ID]/[#] {OPT}`.");
+    let mut sql: String = 
+        "DELETE
+        FROM bike
+        WHERE 
+        ".to_string();
+    let mut where_sql: Vec<String> = vec![];
+    let mut dyn_params: Vec<Box<dyn ToSql>> = Vec::new();
+
+    for id in command.cleaned_id.clone() {
+        where_sql.push(format!("id = ?{}", where_sql.len() + 1));
+        dyn_params.push(Box::new(id));
     }
 
-    let id: i32 = if let Some(absolute_id) = command.absolute_id.get() {
-        absolute_id as i32
-    } else {
-        let mut bikes: Vec<BikeList> = helpers::get::bike(conn, command.clone())?;
-        let bike: BikeList = if let Some(dyn_id) = command.id.get() {
-            bikes.get(dyn_id as usize - 1).cloned().unwrap_or_else(|| {
-                err_exit!("Bike for your request was not found.");
-            })
-        } else {
-            bikes.pop().unwrap()
-        };
-        bike.bike_id
-    };
+    sql.push_str(where_sql.join(" OR ").as_str());
 
-    let result = conn.execute("DELETE FROM bike WHERE id = ?1", params![id]);
+    let result = conn.execute(
+        &sql, 
+        params_from_iter(dyn_params.iter().map(|b| b.as_ref()))
+    );
 
     match result {
         Ok(_) => {
             println!(
                 "{}",
-                format!("Bike id:{} deleted successfully.", &id).blue()
+                format!(
+                    "Bike id:{} deleted successfully.", 
+                    command.cleaned_id
+                    .iter()
+                    .map(|v| v.to_string())
+                    .collect::<Vec<String>>()
+                    .join(","))
+                .blue()
             );
             Ok(())
         }
         Err(rusqlite::Error::SqliteFailure(err, _))
             if err.code == rusqlite::ErrorCode::ConstraintViolation =>
         {
-            err_exit!("You cannot delete a bike that has rides and chain lubrication.");
+            err_exit!("You can not delete a bike that has rides or chain lubrication.");
         }
         Err(e) => {
             err_exit!(&e);
@@ -73,54 +92,38 @@ fn bike(conn: &Connection, command: Command) -> Result<()> {
 }
 
 fn buy(conn: &mut Connection, command: Command) -> Result<()> {
-    if command.id.is_none() && command.absolute_id.is_none() {
-        err_exit!("Command params missed.\nExpected: `bcl del buy id:[ID]/[#] {OPT}`.");
+    let mut sql = 
+        "DELETE 
+        FROM buy
+        WHERE
+        ".to_string();
+    let mut where_sql: Vec<String> = vec![];
+    let mut dyn_params: Vec<Box<dyn ToSql>> = Vec::new();
+
+    for id in command.cleaned_id.clone() {
+        where_sql.push(format!("id = ?{}", where_sql.len() + 1));
+        dyn_params.push(Box::new(id));
     }
 
-    let mut tags: Vec<String> = Vec::new();
-    let mut deleted_tags: Vec<String> = Vec::new();
+    sql.push_str(where_sql.join(" OR ").as_str());
 
-    let id: i32 = if let Some(absolute_id) = command.absolute_id.get() {
-        if let Ok(tags_row) = conn.query_row(
-            "SELECT
-                COALESCE(GROUP_CONCAT(t.name, ', '), '') AS tags
-            FROM tag_to_buy tb
-            JOIN tag t ON t.id = tb.tag_id
-            WHERE tb.buy_id = ?1",
-            params![absolute_id],
-            |row| row.get::<_, String>(0),
-        ) {
-            tags.extend(tags_row.split(", ").map(|s| s.to_string()));
-        }
-        absolute_id as i32
-    } else {
-        let dyn_id: usize = command.id.unwrap() as usize;
-        let result: BuyResult = helpers::get::buy(conn, command)?;
+    _ = conn.execute(
+        &sql, 
+        params_from_iter(dyn_params.iter().map(|b| b.as_ref()))
+    );
 
-        let buys = if let helpers::BuyResult::List(buys) = result {
-            buys
-        } else {
-            unreachable!()
-        };
+    let deleted_tags: Vec<String> = tag_del_if_unused(conn)?;
 
-        let buy: BuyList = buys.get(dyn_id - 1).cloned().unwrap_or_else(|| {
-            err_exit!("buy for your request was not found.");
-        });
-        tags.extend(buy.tags.split(", ").map(|s| s.to_string()));
-        buy.self_id
-    };
-
-    conn.execute("DELETE FROM buy WHERE id = ?1", params![id])?;
-    println!("TAGS: {:?}", &tags);
-
-    for tag_name in tags {
-        if let Some(tag_name) = tag_del_if_unused(conn, tag_name.as_str())? {
-            println!("DELETED: {}", &tag_name);
-            deleted_tags.push(tag_name);
-        }
-    }
-
-    println!("{}", format!("buy id:{} deleted successfully.", &id).blue());
+    println!(
+        "{}", 
+        format!(
+            "buy id:{} deleted successfully.", 
+            command.cleaned_id
+                .iter()
+                .map(|v| v.to_string())
+                .collect::<Vec<String>>()
+                .join(",")).blue()
+        );
 
     if !deleted_tags.is_empty() {
         println!(
@@ -192,54 +195,37 @@ fn chain_lub(conn: &Connection, command: Command) -> Result<()> {
 }
 
 fn ride(conn: &mut Connection, command: Command) -> Result<()> {
-    if command.id.is_none() && command.absolute_id.is_none() {
-        err_exit!("Command params missed.\nExpected: `bcl del ride id:[ID]/[#] {OPT}`.");
+    let mut sql = 
+        "DELETE 
+        FROM buy
+        WHERE
+        ".to_string();
+    let mut where_sql: Vec<String> = vec![];
+    let mut dyn_params: Vec<Box<dyn ToSql>> = Vec::new();
+
+    for id in command.cleaned_id.clone() {
+        where_sql.push(format!("id = ?{}", where_sql.len() + 1));
+        dyn_params.push(Box::new(id));
     }
 
-    let mut tags: Vec<String> = Vec::new();
-    let mut deleted_tags: Vec<String> = Vec::new();
+    sql.push_str(where_sql.join(" OR ").as_str());
 
-    let id: i32 = if let Some(absolute_id) = command.absolute_id.get() {
-        if let Ok(tags_row) = conn.query_row(
-            "SELECT
-                COALESCE(GROUP_CONCAT(t.name, ', '), '') AS tags
-            FROM tag_to_ride tr
-            JOIN tag t ON t.id = tr.tag_id
-            WHERE tr.ride_id = ?1",
-            params![absolute_id],
-            |row| row.get::<_, String>(0),
-        ) {
-            tags.extend(tags_row.split(", ").map(|s| s.to_string()));
-        }
-        absolute_id as i32
-    } else {
-        let dyn_id: usize = command.id.unwrap() as usize;
-        let result: RideResult = helpers::get::ride(conn, command)?;
+    _ = conn.execute(
+        &sql, 
+        params_from_iter(dyn_params.iter().map(|b| b.as_ref()))
+    );
 
-        let rides: Vec<RideList> = if let helpers::RideResult::List(rides) = result {
-            rides
-        } else {
-            unreachable!()
-        };
-
-        let ride: RideList = rides.get(dyn_id - 1).cloned().unwrap_or_else(|| {
-            err_exit!("Ride for your request was not found.");
-        });
-        tags.extend(ride.tags.split(", ").map(|s| s.to_string()));
-        ride.ride_id
-    };
-
-    conn.execute("DELETE FROM ride WHERE id = ?1", params![id])?;
-
-    for tag_name in tags {
-        if let Some(tag_name) = tag_del_if_unused(conn, tag_name.as_str())? {
-            deleted_tags.push(tag_name);
-        }
-    }
+    let deleted_tags: Vec<String> = tag_del_if_unused(conn)?;
 
     println!(
         "{}",
-        format!("Ride id:{} deleted successfully.", &id).blue()
+        format!(
+            "Ride id:{} deleted successfully.", 
+            command.cleaned_id
+                .iter()
+                .map(|v| v.to_string())
+                .collect::<Vec<String>>()
+                .join(",")).blue()
     );
 
     if !deleted_tags.is_empty() {

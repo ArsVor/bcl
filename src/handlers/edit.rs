@@ -10,7 +10,7 @@ use crate::err_exit;
 
 use super::helpers::{self, BuyResult, RideResult};
 
-pub fn route(mut conn: Connection, command: Command) -> Result<()> {
+pub fn route(mut conn: Connection, mut command: Command) -> Result<()> {
     let obj = if let Some(obj) = command.object.get() {
         obj
     } else {
@@ -19,6 +19,8 @@ pub fn route(mut conn: Connection, command: Command) -> Result<()> {
             command.funk.unwrap()
         ));
     };
+
+    _ = helpers::clean_id(&conn, &mut command, obj.as_str());
 
     match obj.as_str() {
         "bike" => bike(&conn, command),
@@ -120,7 +122,6 @@ fn buy(conn: &mut Connection, command: Command) -> Result<()> {
     let mut category_id: Option<i32> = None;
     let mut bike_id: Option<i32> = None;
     let mut is_changed: bool = false;
-    let mut deleted_tags: Vec<String> = Vec::new();
 
     let buy_def: BuyList = match (buys.len(), id) {
         (0, _) => {
@@ -262,23 +263,24 @@ fn buy(conn: &mut Connection, command: Command) -> Result<()> {
         }
 
         if !tags_to_del.is_empty() {
-            for tag_name in tags_to_del {
-                if let Ok(tag_id) = conn.query_row(
-                    "SELECT id FROM tag WHERE name = ?1",
-                    params![tag_name],
-                    |row| row.get::<_, i32>(0),
-                ) {
-                    conn.execute(
-                        "DELETE FROM tag_to_buy WHERE tag_id = ?1 AND buy_id = ?2",
-                        params![tag_id, buy.self_id],
-                    )?;
-                }
-                if let Some(tag_name) = tag_del_if_unused(conn, tag_name.as_str())? {
-                    deleted_tags.push(tag_name);
-                }
+            let mut tag_id_query: Vec<String> = vec![];
+            for tag_name in &tags_to_del {
+                tag_id_query.push(
+                    format!(
+                        "tag_id = (SELECT t.id FROM tag WHERE t.name = '{}')",
+                        &tag_name
+                    )
+                );
             }
+
+            conn.execute(
+                "DELETE FROM tag_to_buy WHERE buy_id = ?1 AND ?2",
+                params![buy.self_id, format!("({})", tag_id_query.join(" OR "))],
+            )?;
         }
     }
+
+    let deleted_tags: Vec<String> = tag_del_if_unused(conn)?;
 
     println!(
         "{}",
@@ -402,7 +404,6 @@ fn chain_lub(conn: &Connection, command: Command) -> Result<()> {
 
 fn ride(conn: &mut Connection, command: Command) -> Result<()> {
     let id: Option<u32> = command.id.get();
-    let mut deleted_tags: Vec<String> = Vec::new();
     let result: RideResult = helpers::get::ride(conn, command)?;
 
     let mut rides: Vec<RideList> = if let helpers::RideResult::List(rides) = result {
@@ -500,23 +501,24 @@ fn ride(conn: &mut Connection, command: Command) -> Result<()> {
         }
 
         if !tags_to_del.is_empty() {
-            for tag_name in tags_to_del {
-                if let Ok(tag_id) = conn.query_row(
-                    "SELECT id FROM tag WHERE name = ?1",
-                    params![tag_name],
-                    |row| row.get::<_, i32>(0),
-                ) {
-                    conn.execute(
-                        "DELETE FROM tag_to_ride WHERE tag_id = ?1 AND ride_id = ?2",
-                        params![tag_id, ride.ride_id],
-                    )?;
-                }
-                if let Some(tag_name) = tag_del_if_unused(conn, tag_name.as_str())? {
-                    deleted_tags.push(tag_name);
-                }
+            let mut tag_id_query: Vec<String> = vec![];
+            for tag_name in &tags_to_del {
+                tag_id_query.push(
+                    format!(
+                        "tag_id = (SELECT t.id FROM tag WHERE t.name = '{}')",
+                        &tag_name
+                    )
+                );
             }
+
+            conn.execute(
+                "DELETE FROM tag_to_ride WHERE ride_id = ?1 AND ?2",
+                params![ride.id, format!("({})", tag_id_query.join(" OR "))],
+            )?;
         }
     }
+
+    let deleted_tags: Vec<String> = tag_del_if_unused(conn)?;
 
     println!(
         "{}",

@@ -34,8 +34,8 @@ pub fn clean_id(conn: &Connection, command: &mut Command, obj: &str) -> Result<(
     let mut virtual_command: Command = command.clone();
     virtual_command.lim = 0;
 
-    if !command.multi_absolute_id.is_empty() {
-        virtual_command.cleaned_id = command.multi_absolute_id.clone();
+    if !command.raw_self_id.is_empty() {
+        virtual_command.cleaned_id = command.raw_self_id.clone();
     }
 
     let id_vec: Vec<u32> = match obj {
@@ -68,18 +68,18 @@ pub fn clean_id(conn: &Connection, command: &mut Command, obj: &str) -> Result<(
             RideResult::Info(items) => items.into_iter().map(|item| item.ride_id as u32).collect(),
         },
         "tag" => {
-            err_exit!("Name called only!");
-        }
+            return Ok(())
+        },
         _ => {
             err_exit!(format!("Unknown obj: {}", &obj));
         }
     };
 
-    command.cleaned_id = match (command.multi_absolute_id.is_empty(), command.multi_id.is_empty()) {
+    command.cleaned_id = match (command.raw_self_id.is_empty(), command.raw_hash_id.is_empty()) {
         (false, _) => {
             let cleaned_set: HashSet<u32> = id_vec.iter().copied().collect();
 
-            for id in &command.multi_absolute_id {
+            for id in &command.raw_self_id {
                 if !cleaned_set.contains(id) {
                     warn!(format!(
                         "`{}` with ID: {} - don't exist in this query. Skipped!",
@@ -94,7 +94,7 @@ pub fn clean_id(conn: &Connection, command: &mut Command, obj: &str) -> Result<(
             let id_vec_len: u32 = id_vec.len() as u32;
             let mut cleaned_id: Vec<u32> = vec![];
 
-            for id in command.multi_id.clone() {
+            for id in command.raw_hash_id.clone() {
                 if id > id_vec_len {
                     warn!(format!(
                         "`{}` with #: {} - don't exist in this query. Skipped!",

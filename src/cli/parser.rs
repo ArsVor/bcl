@@ -118,25 +118,17 @@ pub fn named_parse(mut command: Command, arg: String) -> Command {
                 }
             }
             "id" => {
-                if val.contains(",") || val.contains("..") {
-                    command.multi_absolute_id = multiple_id_pars(val.to_string())
-                } else {
-                    if command.id.is_some() {
-                        err_exit!("Input # or ID, not both.");
-                    }
-                    if let Ok(number) = val.parse::<u32>() {
-                        command
-                            .absolute_id
-                            .set_or_err(Some(number), "multiple ID input");
-                    } else {
-                        err_exit!(format!(
-                            "Wrong value of '{key}'. Expected int, but given '{val}'"
-                        ));
-                    }
+                if command.id.is_some()
+                    || !command.raw_hash_id.is_empty()
+                    || !command.raw_self_id.is_empty()
+                {
+                    err_exit!("Input # or ID, not both.");
                 }
+
+                command.raw_self_id = multiple_id_pars(val.to_string());
             }
             _ => {
-                err_exit!(format!("Unexpected key - '{key}'."));
+                err_exit!(format!("Unexpected key: '{key}'."));
             }
         }
     } else {
@@ -145,7 +137,7 @@ pub fn named_parse(mut command: Command, arg: String) -> Command {
                 command.lim = 0;
             }
             _ => {
-                err_exit!(format!("Unexpected key - '{key}'."));
+                err_exit!(format!("Unexpected key: '{key}'."));
             }
         }
     }

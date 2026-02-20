@@ -99,23 +99,35 @@ pub fn tag_get_or_create_tx(tx: &Transaction, tag_name: &str) -> Result<i32> {
     Ok(tx.last_insert_rowid() as i32)
 }
 
-pub fn tag_del_if_unused(conn: &mut Connection, tag_name: &str) -> Result<Option<String>> {
-    let exists: bool = conn.query_row(
-        "SELECT EXISTS(
-            SELECT 1 FROM tag_to_buy ttb JOIN tag t ON t.id = ttb.tag_id WHERE t.name = ?1
-            UNION ALL
-            SELECT 1 FROM tag_to_ride ttr JOIN tag t ON t.id = ttr.tag_id WHERE t.name = ?1
-        )",
-        params![tag_name],
-        |row| row.get(0),
+pub fn tag_del_if_unused(conn: &mut Connection) -> Result<Vec<String>> {
+    let mut deleted_tags: Vec<String> = vec![];
+    let mut stmt = conn.prepare(
+        "SELECT t.name
+        FROM tag t
+        WHERE 
+        (SELECT COUNT(tb.id) FROM tag_to_buy tb WHERE tb.tag_id = t.id) = 0
+        AND
+        (SELECT COUNT(tr.id) FROM tag_to_ride tr WHERE tr.tag_id = t.id) = 0
+        ",
     )?;
-    if exists {
-        return Ok(None);
+
+    let tags = stmt.query_map([], |row| row.get::<_, String>(0))?;
+    for tag in tags {
+        deleted_tags.push(tag?);
     }
 
-    conn.execute("DELETE FROM tag WHERE name = ?1", params![tag_name])?;
+    conn.execute(
+        "DELETE
+        FROM tag
+        WHERE 
+        (SELECT COUNT(tb.id) FROM tag_to_buy tb WHERE tb.tag_id = tag.id) = 0
+        AND
+        (SELECT COUNT(tr.id) FROM tag_to_ride tr WHERE tr.tag_id = tag.id) = 0
+        ",
+        [],
+    )?;
 
-    Ok(Some(tag_name.to_string()))
+    Ok(deleted_tags)
 }
 
 pub fn get_buy_id_with_tag(conn: &Connection, table: &str, name: &str) -> Result<HashSet<i32>> {

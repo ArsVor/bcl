@@ -6,7 +6,9 @@ use crate::db::models::{Bike, Buy, Category, ChainLubrication, Ride};
 use crate::db::queries::{get_bike, get_category, tag_del_if_unused, tag_get_or_create_tx};
 use crate::{err_exit, suc_exit};
 
-pub fn rote(mut conn: Connection, command: Command) -> Result<()> {
+use super::helpers;
+
+pub fn rote(mut conn: Connection, mut command: Command) -> Result<()> {
     let obj = if let Some(obj) = command.object.get() {
         obj
     } else {
@@ -16,14 +18,14 @@ pub fn rote(mut conn: Connection, command: Command) -> Result<()> {
         ));
     };
 
+    _ = helpers::clean_id(&conn, &mut command, obj.as_str());
+
     let _ = match obj.as_str() != "tag" {
         true => {
             let id = if let Some(id) = command.absolute_id.get() {
                 id
             } else {
-                err_exit!(
-                    "Command params missed.\nExpected: `bcl [#]/id:[ID]` mod [PARAMS]"
-                );
+                err_exit!("Command params missed.\nExpected: `bcl [#]/id:[ID]` mod [PARAMS]");
             };
             match obj.as_str() {
                 "bike" => bike(&conn, command, id),
@@ -128,8 +130,6 @@ fn buy(conn: &mut Connection, command: Command, id: u32) -> Result<()> {
 
     let mut cat: Option<Category> = None;
     let mut bike: Option<Bike> = None;
-    let mut tags_to_check: Vec<String> = Vec::new();
-    let mut deleted_tags: Vec<String> = Vec::new();
     let mut target: String = String::new();
 
     let mut buy: Buy = conn.query_row(
@@ -238,30 +238,23 @@ fn buy(conn: &mut Connection, command: Command, id: u32) -> Result<()> {
     }
 
     if !command.exclude_tags.is_empty() {
-        for tag_name in command.exclude_tags {
-            if let Ok(tag_id) = tx.query_row(
-                "SELECT id FROM tag WHERE name = ?1",
-                params![tag_name],
-                |row| row.get::<_, i32>(0),
-            ) {
-                tx.execute(
-                    "DELETE FROM tag_to_buy WHERE tag_id = ?1 AND buy_id = ?2",
-                    params![tag_id, buy.id],
-                )?;
-                tags_to_check.push(tag_name);
-            }
+        let mut tag_id_query: Vec<String> = vec![];
+        for tag_name in &command.exclude_tags {
+            tag_id_query.push(format!(
+                "tag_id = (SELECT t.id FROM tag WHERE t.name = '{}')",
+                &tag_name
+            ));
         }
+
+        tx.execute(
+            "DELETE FROM tag_to_buy WHERE buy_id = ?1 AND ?2",
+            params![buy.id, format!("({})", tag_id_query.join(" OR "))],
+        )?;
     }
 
     tx.commit()?;
 
-    if !tags_to_check.is_empty() {
-        for tag_name in tags_to_check {
-            if let Some(tag_name) = tag_del_if_unused(conn, tag_name.as_str())? {
-                deleted_tags.push(tag_name);
-            }
-        }
-    }
+    let deleted_tags: Vec<String> = tag_del_if_unused(conn)?;
 
     println!(
         "{}",
@@ -426,9 +419,6 @@ fn ride(conn: &mut Connection, command: Command, id: u32) -> Result<()> {
         ));
     }
 
-    let mut tags_to_check: Vec<String> = Vec::new();
-    let mut deleted_tags: Vec<String> = Vec::new();
-
     let mut ride: Ride = conn.query_row(
         "SELECT
             r.id AS ride_id,
@@ -506,31 +496,23 @@ fn ride(conn: &mut Connection, command: Command, id: u32) -> Result<()> {
     }
 
     if !command.exclude_tags.is_empty() {
+        let mut tag_id_query: Vec<String> = vec![];
         for tag_name in &command.exclude_tags {
-            if let Ok(tag_id) = tx.query_row(
-                "SELECT id FROM tag WHERE name = ?1",
-                params![tag_name],
-                |row| row.get::<_, i32>(0),
-            ) {
-                tx.execute(
-                    "DELETE FROM tag_to_ride WHERE tag_id = ?1 AND ride_id = ?2",
-                    params![tag_id, ride.id],
-                )?;
-
-                tags_to_check.push(tag_name.clone());
-            }
+            tag_id_query.push(format!(
+                "tag_id = (SELECT t.id FROM tag WHERE t.name = '{}')",
+                &tag_name
+            ));
         }
+
+        tx.execute(
+            "DELETE FROM tag_to_ride WHERE ride_id = ?1 AND ?2",
+            params![ride.id, format!("({})", tag_id_query.join(" OR "))],
+        )?;
     }
 
     tx.commit()?;
 
-    if !tags_to_check.is_empty() {
-        for tag_name in tags_to_check {
-            if let Some(tag_name) = tag_del_if_unused(conn, tag_name.as_str())? {
-                deleted_tags.push(tag_name);
-            }
-        }
-    }
+    let deleted_tags: Vec<String> = tag_del_if_unused(conn)?;
 
     let tags_str = tags
         .into_iter()
