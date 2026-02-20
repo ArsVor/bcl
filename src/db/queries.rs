@@ -1,102 +1,35 @@
 use std::collections::HashSet;
 
 use chrono::NaiveDate;
-use rusqlite::{Connection, Error, OptionalExtension, Result, Transaction, params};
+use rusqlite::{Error, params, params_from_iter, Connection, OptionalExtension, Result, ToSql, Transaction};
 
 use crate::{cli::structs::Command, err_exit};
 
 use super::models::{Bike, Category};
 
-pub fn get_included_excluded(
-    conn: &Connection,
-    command: Command,
-    table: &str,
-) -> Result<(HashSet<i32>, HashSet<i32>)> {
-    let mut include_id: HashSet<i32> = HashSet::new();
-    let mut exclude_id: HashSet<i32> = HashSet::new();
+pub fn delete_with_id_set(conn: &mut Connection, id_set: Vec<u32>, table: String) -> Result<usize, Error> {
+    let mut sql: String = format!( 
+        "DELETE
+        FROM {}
+        WHERE 
+        ",
+        &table
+    );
+    let mut where_sql: Vec<String> = vec![];
+    let mut dyn_params: Vec<Box<dyn ToSql>> = Vec::new();
 
-    if !command.exclude_tags.is_empty() {
-        for tag in command.exclude_tags {
-            let id_set: HashSet<i32> = get_buy_id_with_tag(conn, table, tag.as_str())?;
-            exclude_id.extend(id_set);
-        }
+    for id in id_set {
+        where_sql.push(format!("id = ?{}", where_sql.len() + 1));
+        dyn_params.push(Box::new(id));
     }
 
-    if !command.include_tags.is_empty() {
-        for (i, tag) in command.include_tags.iter().enumerate() {
-            let id_set: HashSet<i32> = get_buy_id_with_tag(conn, table, tag.as_str())?;
+    sql.push_str(where_sql.join(" OR ").as_str());
 
-            if i == 0 {
-                include_id = id_set;
-            } else {
-                include_id = include_id.intersection(&id_set).copied().collect();
-            }
-        }
-    }
-
-    Ok((include_id, exclude_id))
-}
-
-pub fn get_category(conn: &Connection, abbr: &str) -> Result<Category> {
-    conn.query_row(
-        "SELECT 
-            c.id as id,
-            c.abbr as abbr,
-            c.name as name,
-            COALESCE((SELECT COUNT(b.id) FROM bike b WHERE b.category_id = c.id), 0) as bike_count
-        FROM category c
-        WHERE abbr = ?1",
-        params![abbr],
-        Category::from_row,
+    conn.execute(
+        &sql, 
+        params_from_iter(dyn_params.iter().map(|b| b.as_ref()))
     )
-    .map_err(|e| match e {
-        rusqlite::Error::QueryReturnedNoRows => {
-            err_exit!(format!("category - '{}' does not exist.", &abbr));
-        }
-        _ => e,
-    })
-}
 
-pub fn get_bike(conn: &Connection, abbr: &str, bike_id: u8) -> Result<Bike> {
-    conn.query_row(
-        "SELECT * FROM bike b
-             JOIN category c ON c.id = b.category_id
-             WHERE c.abbr = ?1 AND b.id_in_cat = ?2",
-        params![abbr, bike_id],
-        Bike::from_row,
-    )
-    .map_err(|e| match e {
-        rusqlite::Error::QueryReturnedNoRows => {
-            err_exit!(format!("bike - '{}:{}' does not exist.", &abbr, &bike_id));
-        }
-        _ => e,
-    })
-}
-
-pub fn tag_get_or_create(conn: &Connection, tag_name: &str) -> Result<i32> {
-    if let Ok(id) = conn.query_row(
-        "SELECT id FROM tag WHERE name = ?1",
-        params![tag_name],
-        |row| row.get(0),
-    ) {
-        return Ok(id);
-    }
-
-    conn.execute("INSERT INTO tag (name) VALUES (?1)", params![tag_name])?;
-    Ok(conn.last_insert_rowid() as i32)
-}
-
-pub fn tag_get_or_create_tx(tx: &Transaction, tag_name: &str) -> Result<i32> {
-    if let Ok(id) = tx.query_row(
-        "SELECT id FROM tag WHERE name = ?1",
-        params![tag_name],
-        |row| row.get(0),
-    ) {
-        return Ok(id);
-    }
-
-    tx.execute("INSERT INTO tag (name) VALUES (?1)", params![tag_name])?;
-    Ok(tx.last_insert_rowid() as i32)
 }
 
 pub fn delete_unused_tags(conn: &mut Connection) -> Result<Vec<String>> {
@@ -128,6 +61,58 @@ pub fn delete_unused_tags(conn: &mut Connection) -> Result<Vec<String>> {
     )?;
 
     Ok(deleted_tags)
+}
+
+pub fn get_bike(conn: &Connection, abbr: &str, bike_id: u8) -> Result<Bike> {
+    conn.query_row(
+        "SELECT * FROM bike b
+             JOIN category c ON c.id = b.category_id
+             WHERE c.abbr = ?1 AND b.id_in_cat = ?2",
+        params![abbr, bike_id],
+        Bike::from_row,
+    )
+    .map_err(|e| match e {
+        rusqlite::Error::QueryReturnedNoRows => {
+            err_exit!(format!("bike - '{}:{}' does not exist.", &abbr, &bike_id));
+        }
+        _ => e,
+    })
+}
+
+pub fn get_buy_id_with_bike(conn: &Connection, bike_id: i32) -> Result<HashSet<i32>> {
+    let mut result: HashSet<i32> = HashSet::new();
+    let mut stmt = conn.prepare(
+        "SELECT b.id
+         FROM buy b
+         JOIN buy_to_bike bbk ON b.id = bbk.buy_id
+         JOIN bike bk ON bbk.bike_id = bk.id
+         WHERE bk.id = ?1",
+    )?;
+    let buy_ids = stmt.query_map([bike_id], |row| row.get::<_, i32>(0))?;
+
+    for id in buy_ids {
+        result.insert(id?);
+    }
+
+    Ok(result)
+}
+
+pub fn get_buy_id_with_cat(conn: &Connection, abbr: &str) -> Result<HashSet<i32>> {
+    let mut result: HashSet<i32> = HashSet::new();
+    let mut stmt = conn.prepare(
+        "SELECT b.id
+         FROM buy b
+         JOIN buy_to_category bc ON b.id = bc.buy_id
+         JOIN category c ON bc.category_id = c.id
+         WHERE c.abbr = ?1",
+    )?;
+    let buy_ids = stmt.query_map([abbr], |row| row.get::<_, i32>(0))?;
+
+    for id in buy_ids {
+        result.insert(id?);
+    }
+
+    Ok(result)
 }
 
 pub fn get_buy_id_with_tag(conn: &Connection, table: &str, name: &str) -> Result<HashSet<i32>> {
@@ -162,40 +147,54 @@ pub fn get_buy_id_with_tag(conn: &Connection, table: &str, name: &str) -> Result
     Ok(result)
 }
 
-pub fn get_buy_id_with_cat(conn: &Connection, abbr: &str) -> Result<HashSet<i32>> {
-    let mut result: HashSet<i32> = HashSet::new();
-    let mut stmt = conn.prepare(
-        "SELECT b.id
-         FROM buy b
-         JOIN buy_to_category bc ON b.id = bc.buy_id
-         JOIN category c ON bc.category_id = c.id
-         WHERE c.abbr = ?1",
-    )?;
-    let buy_ids = stmt.query_map([abbr], |row| row.get::<_, i32>(0))?;
-
-    for id in buy_ids {
-        result.insert(id?);
-    }
-
-    Ok(result)
+pub fn get_category(conn: &Connection, abbr: &str) -> Result<Category> {
+    conn.query_row(
+        "SELECT 
+            c.id as id,
+            c.abbr as abbr,
+            c.name as name,
+            COALESCE((SELECT COUNT(b.id) FROM bike b WHERE b.category_id = c.id), 0) as bike_count
+        FROM category c
+        WHERE abbr = ?1",
+        params![abbr],
+        Category::from_row,
+    )
+    .map_err(|e| match e {
+        rusqlite::Error::QueryReturnedNoRows => {
+            err_exit!(format!("category - '{}' does not exist.", &abbr));
+        }
+        _ => e,
+    })
 }
 
-pub fn get_buy_id_with_bike(conn: &Connection, bike_id: i32) -> Result<HashSet<i32>> {
-    let mut result: HashSet<i32> = HashSet::new();
-    let mut stmt = conn.prepare(
-        "SELECT b.id
-         FROM buy b
-         JOIN buy_to_bike bbk ON b.id = bbk.buy_id
-         JOIN bike bk ON bbk.bike_id = bk.id
-         WHERE bk.id = ?1",
-    )?;
-    let buy_ids = stmt.query_map([bike_id], |row| row.get::<_, i32>(0))?;
+pub fn get_included_excluded(
+    conn: &Connection,
+    command: Command,
+    table: &str,
+) -> Result<(HashSet<i32>, HashSet<i32>)> {
+    let mut include_id: HashSet<i32> = HashSet::new();
+    let mut exclude_id: HashSet<i32> = HashSet::new();
 
-    for id in buy_ids {
-        result.insert(id?);
+    if !command.exclude_tags.is_empty() {
+        for tag in command.exclude_tags {
+            let id_set: HashSet<i32> = get_buy_id_with_tag(conn, table, tag.as_str())?;
+            exclude_id.extend(id_set);
+        }
     }
 
-    Ok(result)
+    if !command.include_tags.is_empty() {
+        for (i, tag) in command.include_tags.iter().enumerate() {
+            let id_set: HashSet<i32> = get_buy_id_with_tag(conn, table, tag.as_str())?;
+
+            if i == 0 {
+                include_id = id_set;
+            } else {
+                include_id = include_id.intersection(&id_set).copied().collect();
+            }
+        }
+    }
+
+    Ok((include_id, exclude_id))
 }
 
 pub fn get_lub_info(conn: &Connection, bike_id: u8) -> Result<f32> {
@@ -232,4 +231,30 @@ pub fn get_lub_info(conn: &Connection, bike_id: u8) -> Result<f32> {
     };
 
     Ok(distance)
+}
+
+pub fn tag_get_or_create(conn: &Connection, tag_name: &str) -> Result<i32> {
+    if let Ok(id) = conn.query_row(
+        "SELECT id FROM tag WHERE name = ?1",
+        params![tag_name],
+        |row| row.get(0),
+    ) {
+        return Ok(id);
+    }
+
+    conn.execute("INSERT INTO tag (name) VALUES (?1)", params![tag_name])?;
+    Ok(conn.last_insert_rowid() as i32)
+}
+
+pub fn tag_get_or_create_tx(tx: &Transaction, tag_name: &str) -> Result<i32> {
+    if let Ok(id) = tx.query_row(
+        "SELECT id FROM tag WHERE name = ?1",
+        params![tag_name],
+        |row| row.get(0),
+    ) {
+        return Ok(id);
+    }
+
+    tx.execute("INSERT INTO tag (name) VALUES (?1)", params![tag_name])?;
+    Ok(tx.last_insert_rowid() as i32)
 }
