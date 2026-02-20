@@ -38,6 +38,7 @@ pub struct Command {
     pub lim: u8,
     pub include_tags: HashSet<String>,
     pub exclude_tags: HashSet<String>,
+    pub cleaned: bool,
 }
 
 impl<T> Field<T> {
@@ -341,6 +342,7 @@ impl Command {
             lim: 15,
             include_tags: HashSet::new(),
             exclude_tags: HashSet::new(),
+            cleaned: false,
         }
     }
 

@@ -5,7 +5,7 @@ use rusqlite::{Connection, Result, ToSql, params, params_from_iter};
 
 use crate::cli::structs::Command;
 use crate::db::models::{BikeList, BuyList, Category, ChainLubricationList, RideList};
-use crate::db::queries::{get_bike, get_category, delete_unused_tags, tag_get_or_create};
+use crate::db::queries::{delete_unused_tags, get_bike, get_category, tag_get_or_create};
 use crate::err_exit;
 
 use super::helpers::{self, BuyResult, RideResult};
@@ -33,79 +33,67 @@ pub fn route(mut conn: Connection, mut command: Command) -> Result<()> {
 }
 
 fn bike(conn: &Connection, command: Command) -> Result<()> {
-    let id = command.id.get();
-    let cat: i32;
-    let mut id_in_cat: Option<i32> = None;
-    let mut bikes: Vec<BikeList> = helpers::get::bike(conn, command)?;
+    let bikes: Vec<BikeList> = helpers::get::bike(conn, command)?;
 
-    let mut bike: BikeList = match (bikes.len(), id) {
-        (0, _) => {
-            err_exit!("Bike for your request was not found.");
-        }
-        (1, None) => bikes.pop().unwrap(),
-        (_, Some(dyn_id)) => bikes.get(dyn_id as usize - 1).cloned().unwrap_or_else(|| {
-            err_exit!("Bike for your request was not found.");
-        }),
-        _ => {
-            err_exit!("Not enough params. Can't select 1 bike.");
-        }
-    };
-
-    let bike_cod: String = bike.code.clone();
-
-    bike = helpers::editor::edit_bike(bike).expect("failed to edit buy");
-
-    let mut dyn_params: Vec<Box<dyn ToSql>> = vec![Box::new(&bike.name), Box::new(bike.added)];
-    let mut sql: String = "
-        UPDATE bike
-        SET
-            name = ?1,
-            datestamp = ?2
-    "
-    .to_string();
-
-    if bike_cod != bike.code {
-        let cod_parts: Vec<&str> = bike.code.splitn(2, ":").collect();
-        if let Ok(num) = cod_parts[1].parse::<i32>() {
-            id_in_cat = Some(num)
-        };
-        cat = get_category(conn, cod_parts[0])?.id;
-
-        if let Some(id_in_cat) = id_in_cat {
-            let exist: bool = conn.query_row(
-                "SELECT EXISTS(
-                    SELECT 1 FROM bike WHERE category_id = ?1 AND id_in_cat = ?2
-                )",
-                params![cat, id_in_cat],
-                |row| row.get(0),
-            )?;
-            if !exist {
-                sql.push_str(&format!(", category_id = ?{}", dyn_params.len() + 1));
-                dyn_params.push(Box::new(cat));
-                sql.push_str(&format!(", id_in_cat = ?{}", dyn_params.len() + 1));
-                dyn_params.push(Box::new(id_in_cat));
-            } else {
-                err_exit!(format!("Bike {} is already exist.", &bike.code));
-            };
-        }
+    if bikes.is_empty() {
+        err_exit!("Bike for your request was not found.");
     }
 
-    sql.push_str(&format!(" WHERE id = ?{}", dyn_params.len() + 1));
-    dyn_params.push(Box::new(bike.bike_id));
+    for mut bike in bikes {
+        let bike_cod: String = bike.code.clone();
 
-    conn.execute(
-        &sql,
-        params_from_iter(dyn_params.iter().map(|b| b.as_ref())),
-    )?;
+        bike = helpers::editor::edit_bike(bike).expect("failed to edit bike");
 
-    println!(
-        "{}",
-        format!(
-            "Bike - id:{} set to: '{} {} {}'",
-            &bike.bike_id, &bike.code, &bike.name, &bike.added
-        )
-        .blue()
-    );
+        let mut dyn_params: Vec<Box<dyn ToSql>> = vec![Box::new(&bike.name), Box::new(bike.added)];
+        let mut sql: String = "
+            UPDATE bike
+            SET
+                name = ?1,
+                datestamp = ?2
+        "
+        .to_string();
+
+        if bike_cod != bike.code {
+            let cod_parts: Vec<&str> = bike.code.splitn(2, ":").collect();
+            let id_in_cat: Option<i32> = cod_parts[1].parse::<i32>().ok();
+            let cat: i32 = get_category(conn, cod_parts[0])?.id;
+
+            if let Some(id_in_cat) = id_in_cat {
+                let exist: bool = conn.query_row(
+                    "SELECT EXISTS(
+                        SELECT 1 FROM bike WHERE category_id = ?1 AND id_in_cat = ?2
+                    )",
+                    params![cat, id_in_cat],
+                    |row| row.get(0),
+                )?;
+                if !exist {
+                    sql.push_str(&format!(", category_id = ?{}", dyn_params.len() + 1));
+                    dyn_params.push(Box::new(cat));
+                    sql.push_str(&format!(", id_in_cat = ?{}", dyn_params.len() + 1));
+                    dyn_params.push(Box::new(id_in_cat));
+                } else {
+                    err_exit!(format!("Bike {} is already exist.", &bike.code));
+                };
+            }
+        }
+
+        sql.push_str(&format!(" WHERE id = ?{}", dyn_params.len() + 1));
+        dyn_params.push(Box::new(bike.bike_id));
+
+        conn.execute(
+            &sql,
+            params_from_iter(dyn_params.iter().map(|b| b.as_ref())),
+        )?;
+
+        println!(
+            "{}",
+            format!(
+                "Bike - id:{} set to: '{} {} {}'",
+                &bike.bike_id, &bike.code, &bike.name, &bike.added
+            )
+            .blue()
+        );
+    }
 
     Ok(())
 }
@@ -265,12 +253,10 @@ fn buy(conn: &mut Connection, command: Command) -> Result<()> {
         if !tags_to_del.is_empty() {
             let mut tag_id_query: Vec<String> = vec![];
             for tag_name in &tags_to_del {
-                tag_id_query.push(
-                    format!(
-                        "tag_id = (SELECT t.id FROM tag WHERE t.name = '{}')",
-                        &tag_name
-                    )
-                );
+                tag_id_query.push(format!(
+                    "tag_id = (SELECT t.id FROM tag WHERE t.name = '{}')",
+                    &tag_name
+                ));
             }
 
             conn.execute(
@@ -503,12 +489,10 @@ fn ride(conn: &mut Connection, command: Command) -> Result<()> {
         if !tags_to_del.is_empty() {
             let mut tag_id_query: Vec<String> = vec![];
             for tag_name in &tags_to_del {
-                tag_id_query.push(
-                    format!(
-                        "tag_id = (SELECT t.id FROM tag WHERE t.name = '{}')",
-                        &tag_name
-                    )
-                );
+                tag_id_query.push(format!(
+                    "tag_id = (SELECT t.id FROM tag WHERE t.name = '{}')",
+                    &tag_name
+                ));
             }
 
             conn.execute(

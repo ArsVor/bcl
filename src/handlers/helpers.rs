@@ -67,15 +67,16 @@ pub fn clean_id(conn: &Connection, command: &mut Command, obj: &str) -> Result<(
 
             RideResult::Info(items) => items.into_iter().map(|item| item.ride_id as u32).collect(),
         },
-        "tag" => {
-            return Ok(())
-        },
+        "tag" => return Ok(()),
         _ => {
             err_exit!(format!("Unknown obj: {}", &obj));
         }
     };
 
-    command.cleaned_id = match (command.raw_self_id.is_empty(), command.raw_hash_id.is_empty()) {
+    command.cleaned_id = match (
+        command.raw_self_id.is_empty(),
+        command.raw_hash_id.is_empty(),
+    ) {
         (false, _) => {
             let cleaned_set: HashSet<u32> = id_vec.iter().copied().collect();
 
@@ -89,7 +90,7 @@ pub fn clean_id(conn: &Connection, command: &mut Command, obj: &str) -> Result<(
             }
 
             id_vec
-        },
+        }
         (true, false) => {
             let id_vec_len: u32 = id_vec.len() as u32;
             let mut cleaned_id: Vec<u32> = vec![];
@@ -106,17 +107,16 @@ pub fn clean_id(conn: &Connection, command: &mut Command, obj: &str) -> Result<(
             }
 
             cleaned_id
-        },
-        (true, true) => {
-            id_vec
         }
+        (true, true) => id_vec,
     };
     println!("cleaned_id: {:?}", &command.cleaned_id);
 
     if command.cleaned_id.is_empty() {
-        suc_exit!("Nothing to do!")
+        suc_exit!("Your request didn't match any result. Nothing to do!")
     } else {
         command.cleaned_id.sort();
+        command.cleaned = true;
     }
 
     Ok(())
@@ -280,10 +280,7 @@ pub mod get {
         let mut where_sql_id: Vec<String> = vec![];
         let mut dyn_params: Vec<Box<dyn ToSql>> = Vec::new();
 
-        if let Some(absolute_id) = command.absolute_id.get() {
-            where_sql.push(format!("b.id = ?{}", where_sql.len() + 1));
-            dyn_params.push(Box::new(absolute_id));
-        } else {
+        if !command.cleaned {
             if let Some(category) = command.category.get() {
                 where_sql.push(format!("c.abbr = ?{}", where_sql.len() + 1));
                 dyn_params.push(Box::new(category));
@@ -302,7 +299,10 @@ pub mod get {
         }
 
         for id in command.cleaned_id {
-            where_sql_id.push(format!("b.id = ?{}", where_sql.len() + where_sql_id.len() + 1));
+            where_sql_id.push(format!(
+                "b.id = ?{}",
+                where_sql.len() + where_sql_id.len() + 1
+            ));
             dyn_params.push(Box::new(id));
         }
 
@@ -486,7 +486,10 @@ pub mod get {
         }
 
         for id in command.cleaned_id.clone() {
-            where_sql_id.push(format!("b.id = ?{}", where_sql.len() + where_sql_id.len() + 1));
+            where_sql_id.push(format!(
+                "b.id = ?{}",
+                where_sql.len() + where_sql_id.len() + 1
+            ));
             dyn_params.push(Box::new(id));
         }
 
@@ -664,7 +667,10 @@ pub mod get {
         }
 
         for id in command.cleaned_id.clone() {
-            where_sql_id.push(format!("r.id = ?{}", where_sql.len() + where_sql_id.len() + 1));
+            where_sql_id.push(format!(
+                "r.id = ?{}",
+                where_sql.len() + where_sql_id.len() + 1
+            ));
             dyn_params.push(Box::new(id));
         }
 
@@ -821,7 +827,10 @@ pub mod get {
         }
 
         for id in command.cleaned_id.clone() {
-            where_sql_id.push(format!("l.id = ?{}", where_sql.len() + where_sql_id.len() + 1));
+            where_sql_id.push(format!(
+                "l.id = ?{}",
+                where_sql.len() + where_sql_id.len() + 1
+            ));
             dyn_params.push(Box::new(id));
         }
 
