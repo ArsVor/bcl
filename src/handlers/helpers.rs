@@ -877,8 +877,10 @@ pub mod editor {
         let mut tmp = NamedTempFile::new()?;
 
         // 2. Пишемо дані bike у файл у зручному для редагування форматі
-        writeln!(tmp, "id: {}", bike.id)?;
-        writeln!(tmp, "bike_id: {}", bike.bike_id)?;
+        writeln!(tmp, "# -------- system --------")?;
+        writeln!(tmp, "ID: {}  # read only", bike.id)?;
+        writeln!(tmp, "# ------------------------")?;
+        writeln!(tmp)?;
         writeln!(tmp, "code: {}", bike.code)?;
         writeln!(tmp, "name: {}", bike.name)?;
         writeln!(tmp, "date: {}", bike.added)?;
@@ -886,10 +888,12 @@ pub mod editor {
         tmp.flush()?;
 
         // 3. Визначаємо редактор
-        let editor = env::var("EDITOR").unwrap_or_else(|_| "vi".to_string());
+        let editor = env::var("EDITOR").unwrap_or_else(|_| "vim".to_string());
 
-        // 4. Запускаємо редактор
+        // 4. Запускаємо редактор # - коментований стиль
         process::Command::new(editor)
+            .arg("-c")
+            .arg("set ft=yaml")
             .arg(tmp.path())
             .status()
             .expect("failed to run editor");
@@ -916,8 +920,10 @@ pub mod editor {
     pub fn edit_buy(mut buy: BuyList) -> std::io::Result<BuyList> {
         let mut tmp = NamedTempFile::new()?;
 
-        writeln!(tmp, "id: {}", buy.id)?;
-        writeln!(tmp, "buy_id: {}", buy.self_id)?;
+        writeln!(tmp, "# -------- system --------")?;
+        writeln!(tmp, "ID: {}  # read only", buy.id)?;
+        writeln!(tmp, "# ------------------------")?;
+        writeln!(tmp)?;
         writeln!(tmp, "target: {}", buy.target)?;
         writeln!(tmp, "tags: {}", buy.tags)?;
         writeln!(tmp, "name: {}", buy.name)?;
@@ -926,9 +932,11 @@ pub mod editor {
 
         tmp.flush()?;
 
-        let editor = env::var("EDITOR").unwrap_or_else(|_| "vi".to_string());
+        let editor = env::var("EDITOR").unwrap_or_else(|_| "vim".to_string());
 
         process::Command::new(editor)
+            .arg("-c")
+            .arg("set ft=yaml")
             .arg(tmp.path())
             .status()
             .expect("failed to run editor");
@@ -955,15 +963,20 @@ pub mod editor {
     pub fn edit_cat(mut category: Category) -> std::io::Result<Category> {
         let mut tmp = NamedTempFile::new()?;
 
-        writeln!(tmp, "id: {}", category.id)?;
+        writeln!(tmp, "# -------- system --------")?;
+        writeln!(tmp, "ID: {}  # read only", category.id)?;
+        writeln!(tmp, "# ------------------------")?;
+        writeln!(tmp)?;
         writeln!(tmp, "abbr: {}", category.abbr)?;
         writeln!(tmp, "name: {}", category.name)?;
 
         tmp.flush()?;
 
-        let editor = env::var("EDITOR").unwrap_or_else(|_| "vi".to_string());
+        let editor = env::var("EDITOR").unwrap_or_else(|_| "vim".to_string());
 
         process::Command::new(editor)
+            .arg("-c")
+            .arg("set ft=yaml")
             .arg(tmp.path())
             .status()
             .expect("failed to run editor");
@@ -995,7 +1008,10 @@ pub mod editor {
     pub fn edit_lub(mut lub: ChainLubricationList) -> std::io::Result<ChainLubricationList> {
         let mut tmp = NamedTempFile::new()?;
 
-        writeln!(tmp, "id: {}", lub.lub_id)?;
+        writeln!(tmp, "# -------- system --------")?;
+        writeln!(tmp, "ID: {}  # read only", lub.id)?;
+        writeln!(tmp, "# ------------------------")?;
+        writeln!(tmp)?;
         writeln!(tmp, "bike: {}", lub.bike)?;
         writeln!(tmp, "date: {}", lub.date)?;
         writeln!(tmp, "passed: {}", lub.passed)?;
@@ -1003,9 +1019,11 @@ pub mod editor {
 
         tmp.flush()?;
 
-        let editor = env::var("EDITOR").unwrap_or_else(|_| "vi".to_string());
+        let editor = env::var("EDITOR").unwrap_or_else(|_| "vim".to_string());
 
         process::Command::new(editor)
+            .arg("-c")
+            .arg("set ft=yaml")
             .arg(tmp.path())
             .status()
             .expect("failed to run editor");
@@ -1031,8 +1049,10 @@ pub mod editor {
     pub fn edit_ride(mut ride: RideList) -> std::io::Result<RideList> {
         let mut tmp = NamedTempFile::new()?;
 
-        writeln!(tmp, "id: {}", ride.id)?;
-        writeln!(tmp, "ride_id: {}", ride.ride_id)?;
+        writeln!(tmp, "# -------- system --------")?;
+        writeln!(tmp, "ID: {}  # read only", ride.id)?;
+        writeln!(tmp, "# ------------------------")?;
+        writeln!(tmp)?;
         writeln!(tmp, "bike: {}", ride.bike)?;
         writeln!(tmp, "date: {}", ride.date)?;
         writeln!(tmp, "distance: {}", ride.distance)?;
@@ -1041,9 +1061,11 @@ pub mod editor {
 
         tmp.flush()?;
 
-        let editor = env::var("EDITOR").unwrap_or_else(|_| "vi".to_string());
+        let editor = env::var("EDITOR").unwrap_or_else(|_| "vim".to_string());
 
         process::Command::new(editor)
+            .arg("-c")
+            .arg("set ft=yaml")
             .arg(tmp.path())
             .status()
             .expect("failed to run editor");

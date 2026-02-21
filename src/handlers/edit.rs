@@ -1,12 +1,14 @@
 use std::collections::HashSet;
 
 use owo_colors::OwoColorize;
-use rusqlite::{Connection, Result, ToSql, params, params_from_iter};
+use rusqlite::{Connection, Error, ErrorCode, Result, ToSql, params, params_from_iter};
 
 use crate::cli::structs::Command;
 use crate::db::models::{BikeList, BuyList, Category, ChainLubricationList, RideList};
-use crate::db::queries::{delete_unused_tags, get_bike, get_category, tag_get_or_create};
-use crate::err_exit;
+use crate::db::queries::{
+    delete_unused_tags, get_bike, get_category, tag_get_or_create, tag_get_or_create_tx,
+};
+use crate::{err_exit, warn};
 
 use super::helpers::{self, BuyResult, RideResult};
 
@@ -99,216 +101,235 @@ fn bike(conn: &Connection, command: Command) -> Result<()> {
 }
 
 fn buy(conn: &mut Connection, command: Command) -> Result<()> {
-    let id: Option<u32> = command.id.get();
     let result: BuyResult = helpers::get::buy(conn, command)?;
 
-    let mut buys = if let helpers::BuyResult::List(buys) = result {
+    let buys: Vec<BuyList> = if let helpers::BuyResult::List(buys) = result {
         buys
     } else {
         unreachable!()
     };
-    let mut category_id: Option<i32> = None;
-    let mut bike_id: Option<i32> = None;
-    let mut is_changed: bool = false;
 
-    let buy_def: BuyList = match (buys.len(), id) {
-        (0, _) => {
-            err_exit!("Buy for your request was not found.");
-        }
-        (1, None) => buys.pop().unwrap(),
-        (_, Some(dyn_id)) => buys.get(dyn_id as usize - 1).cloned().unwrap_or_else(|| {
-            err_exit!("Buy for your request was not found.");
-        }),
-        _ => {
-            err_exit!("Not enough params. Can't select 1 buy.");
-        }
-    };
+    if buys.is_empty() {
+        err_exit!("Buys for your request was not found.");
+    }
 
-    let buy: BuyList = helpers::editor::edit_buy(buy_def.clone()).expect("failed to edit buy");
+    for buy_def in buys {
+        let mut category_id: Option<i32> = None;
+        let mut bike_id: Option<i32> = None;
+        let mut is_changed: bool = false;
 
-    let tags_str: String = buy
-        .tags
-        .split(", ")
-        .map(|s| {
-            let mut t = String::from(s);
-            t.insert(0, '+');
-            t
-        })
-        .collect::<Vec<String>>()
-        .join(", ");
+        let buy: BuyList = helpers::editor::edit_buy(buy_def.clone()).expect("failed to edit buy");
 
-    if buy.target != buy_def.target {
-        is_changed = true;
-        let target_code: Vec<String> = buy
-            .target
-            .clone()
-            .split(":")
-            .map(|s| s.to_string())
-            .collect();
+        let tags_str: String = buy
+            .tags
+            .split(", ")
+            .map(|s| {
+                let mut t = String::from(s);
+                t.insert(0, '+');
+                t
+            })
+            .collect::<Vec<String>>()
+            .join(", ");
 
-        if target_code.len() > 2 || (target_code.len() == 2 && target_code[0].is_empty()) {
-            err_exit!(format!(
-                "Incorrect target code format. \nExpected `[abbr]:[int]`, but given - {}",
-                &buy.target
-            ));
-        }
+        if buy.target != buy_def.target {
+            is_changed = true;
+            let target_code: Vec<String> = buy
+                .target
+                .clone()
+                .split(":")
+                .map(|s| s.to_string())
+                .collect();
 
-        let abbr: &str = target_code[0].as_str();
-
-        if !target_code[0].is_empty() {
-            category_id = Some(get_category(conn, abbr)?.id)
-        };
-
-        if target_code.len() > 1 && !target_code[1].is_empty() {
-            let id: u8 = target_code[1].parse().unwrap_or_else(|_| {
+            if target_code.len() > 2 || (target_code.len() == 2 && target_code[0].is_empty()) {
                 err_exit!(format!(
                     "Incorrect target code format. \nExpected `[abbr]:[int]`, but given - {}",
                     &buy.target
                 ));
-            });
-            bike_id = Some(get_bike(conn, abbr, id)?.id);
-        };
-    }
+            }
 
-    let tx = conn.transaction()?;
+            let abbr: &str = target_code[0].as_str();
 
-    if is_changed {
-        if let Some(b_id) = bike_id {
-            if let Ok(btb_id) = tx.query_row(
-                "SELECT id FROM buy_to_bike WHERE buy_id = ?1",
-                params![buy.self_id],
-                |row| row.get::<_, i32>(0),
-            ) {
-                tx.execute(
-                    "UPDATE buy_to_bike
-                    SET bike_id = ?1
-                    WHERE id = ?2",
-                    params![b_id, btb_id],
-                )?;
+            if !target_code[0].is_empty() {
+                category_id = Some(get_category(conn, abbr)?.id)
+            };
+
+            if target_code.len() > 1 && !target_code[1].is_empty() {
+                let id: u8 = target_code[1].parse().unwrap_or_else(|_| {
+                    err_exit!(format!(
+                        "Incorrect target code format. \nExpected `[abbr]:[int]`, but given - {}",
+                        &buy.target
+                    ));
+                });
+                bike_id = Some(get_bike(conn, abbr, id)?.id);
+            };
+        }
+
+        let tx = conn.transaction()?;
+
+        if is_changed {
+            if let Some(b_id) = bike_id {
+                if let Ok(btb_id) = tx.query_row(
+                    "SELECT id FROM buy_to_bike WHERE buy_id = ?1",
+                    params![buy.self_id],
+                    |row| row.get::<_, i32>(0),
+                ) {
+                    tx.execute(
+                        "UPDATE buy_to_bike
+                        SET bike_id = ?1
+                        WHERE id = ?2",
+                        params![b_id, btb_id],
+                    )?;
+                } else {
+                    tx.execute(
+                        "INSERT INTO buy_to_bike (buy_id, bike_id) VALUES (?1, ?2)",
+                        params![buy.self_id, b_id],
+                    )?;
+                }
             } else {
                 tx.execute(
-                    "INSERT INTO buy_to_bike (buy_id, bike_id) VALUES (?1, ?2)",
-                    params![buy.self_id, b_id],
+                    "DELETE FROM buy_to_bike WHERE buy_id = ?1",
+                    params![buy.self_id],
                 )?;
-            }
-        } else {
-            tx.execute(
-                "DELETE FROM buy_to_bike WHERE buy_id = ?1",
-                params![buy.self_id],
-            )?;
-        };
+            };
 
-        if let Some(c_id) = category_id {
-            if let Ok(btc_id) = tx.query_row(
-                "SELECT id FROM buy_to_category WHERE buy_id = ?1",
-                params![buy.self_id],
-                |row| row.get::<_, i32>(0),
-            ) {
-                tx.execute(
-                    "UPDATE buy_to_category
-                    SET category_id = ?1
-                    WHERE id = ?2",
-                    params![c_id, btc_id],
-                )?;
+            if let Some(c_id) = category_id {
+                if let Ok(btc_id) = tx.query_row(
+                    "SELECT id FROM buy_to_category WHERE buy_id = ?1",
+                    params![buy.self_id],
+                    |row| row.get::<_, i32>(0),
+                ) {
+                    tx.execute(
+                        "UPDATE buy_to_category
+                        SET category_id = ?1
+                        WHERE id = ?2",
+                        params![c_id, btc_id],
+                    )?;
+                } else {
+                    tx.execute(
+                        "INSERT INTO buy_to_category (buy_id, category_id) VALUES (?1, ?2)",
+                        params![buy.self_id, c_id],
+                    )?;
+                }
             } else {
                 tx.execute(
-                    "INSERT INTO buy_to_category (buy_id, category_id) VALUES (?1, ?2)",
-                    params![buy.self_id, c_id],
-                )?;
-            }
-        } else {
-            tx.execute(
-                "DELETE FROM buy_to_category WHERE buy_id = ?1",
-                params![buy.self_id],
-            )?;
-        }
-    }
-
-    tx.execute(
-        "UPDATE buy
-        SET
-            name = ?1,
-            price = ?2,
-            datestamp = ?3
-        WHERE id = ?4",
-        params![buy.name, buy.price, buy.date, buy.self_id],
-    )?;
-
-    tx.commit()?;
-
-    if buy.tags != buy_def.tags {
-        let tags_to_add: HashSet<String> = helpers::tags_diff(&buy.tags, &buy_def.tags);
-        let tags_to_del: HashSet<String> = helpers::tags_diff(&buy_def.tags, &buy.tags);
-
-        if !tags_to_add.is_empty() {
-            for tag_name in tags_to_add {
-                let tag_id = tag_get_or_create(conn, tag_name.as_str())?;
-                conn.execute(
-                    "INSERT INTO tag_to_buy (tag_id, buy_id) VALUES (?1, ?2)",
-                    params![tag_id, buy.self_id],
+                    "DELETE FROM buy_to_category WHERE buy_id = ?1",
+                    params![buy.self_id],
                 )?;
             }
         }
 
-        if !tags_to_del.is_empty() {
-            let mut tag_id_query: Vec<String> = vec![];
-            for tag_name in &tags_to_del {
-                tag_id_query.push(format!(
-                    "tag_id = (SELECT t.id FROM tag WHERE t.name = '{}')",
-                    &tag_name
-                ));
+        tx.execute(
+            "UPDATE buy
+            SET
+                name = ?1,
+                price = ?2,
+                datestamp = ?3
+            WHERE id = ?4",
+            params![buy.name, buy.price, buy.date, buy.self_id],
+        )?;
+
+        if buy.tags != buy_def.tags {
+            let tags_to_add: HashSet<String> = helpers::tags_diff(&buy.tags, &buy_def.tags);
+            let tags_to_del: HashSet<String> = helpers::tags_diff(&buy_def.tags, &buy.tags);
+
+            if !tags_to_add.is_empty() {
+                for tag_name in tags_to_add {
+                    let tag_id = tag_get_or_create_tx(&tx, tag_name.as_str())?;
+                    tx.execute(
+                        "INSERT INTO tag_to_buy (tag_id, buy_id) VALUES (?1, ?2)",
+                        params![tag_id, buy.self_id],
+                    )?;
+                }
             }
 
-            conn.execute(
-                "DELETE FROM tag_to_buy WHERE buy_id = ?1 AND ?2",
-                params![buy.self_id, format!("({})", tag_id_query.join(" OR "))],
-            )?;
+            if !tags_to_del.is_empty() {
+                let mut tag_id_query: Vec<String> = vec![];
+                for tag_name in &tags_to_del {
+                    tag_id_query.push(format!(
+                        "tag_id = (SELECT t.id FROM tag t WHERE t.name = '{}')",
+                        &tag_name
+                    ));
+                }
+
+                tx.execute(
+                    "DELETE FROM tag_to_buy WHERE buy_id = ?1 AND ?2",
+                    params![buy.self_id, format!("({})", tag_id_query.join(" OR "))],
+                )?;
+            }
         }
-    }
 
-    let deleted_tags: Vec<String> = delete_unused_tags(conn)?;
+        tx.commit()?;
 
-    println!(
-        "{}",
-        format!(
-            "Buy - id:\"{0}\" modified to {1} {2} \"{3}\" {4} {5}",
-            buy.self_id, buy.target, &tags_str, buy.name, buy.price, buy.date,
-        )
-        .blue()
-    );
-    if !deleted_tags.is_empty() {
+        let deleted_tags: Vec<String> = delete_unused_tags(conn)?;
+
         println!(
             "{}",
-            format!("Deleted tags: {}", deleted_tags.join(", "),).blue()
+            format!(
+                "Buy - id:\"{0}\" modified to {1} {2} \"{3}\" {4} {5}",
+                buy.self_id, buy.target, &tags_str, buy.name, buy.price, buy.date,
+            )
+            .blue()
         );
+        if !deleted_tags.is_empty() {
+            println!(
+                "{}",
+                format!("Deleted tags: {}", deleted_tags.join(", "),).blue()
+            );
+        }
     }
 
     Ok(())
 }
 
 fn category(conn: &Connection, command: Command) -> Result<()> {
-    let mut category: Category = helpers::get::category_with_params(conn, command)?;
+    let categories: Vec<Category> = helpers::get::categories_with_id(conn, command)?;
 
-    category = helpers::editor::edit_cat(category).expect("failed to edit cat");
+    for mut category in categories {
+        category = helpers::editor::edit_cat(category).expect("failed to edit cat");
 
-    conn.execute(
-        "UPDATE category
-        SET
-            abbr = ?1,
-            name = ?2
-        WHERE id = ?3
-        ",
-        params![category.abbr, category.name, category.id],
-    )?;
+        let result = conn.execute(
+            "UPDATE category
+            SET
+                abbr = ?1,
+                name = ?2
+            WHERE id = ?3
+            ",
+            params![category.abbr, category.name, category.id],
+        );
 
-    println!(
-        "{}",
-        format!(
-            "Category - \"id:{}\" modified to {}: \"{}\"",
-            &category.id, &category.abbr, &category.name,
-        )
-        .blue()
-    );
+        match result {
+            Ok(_) => {
+                println!(
+                    "{}",
+                    format!(
+                        "Category - \"id:{}\" modified to {}: \"{}\"",
+                        &category.id, &category.abbr, &category.name,
+                    )
+                    .blue()
+                );
+            }
+            Err(e) => match e {
+                Error::SqliteFailure(err, Some(msg))
+                    if err.code == ErrorCode::ConstraintViolation =>
+                {
+                    if msg.contains("category.abbr") {
+                        warn!(
+                            format!("ID: {} - skepped. Category '{}' already exists.", &category.id, &category.abbr)
+                        );
+                    } else if msg.contains("category.name") {
+                        warn!(
+                            format!("ID: {} - skepped. Category '{}' already exists.", &category.id, &category.name)
+                        );
+                    } else {
+                        err_exit!(msg);
+                    }
+                }
+                other => {
+                    err_exit!(other);
+                }
+            },
+        }
+    }
 
     Ok(())
 }
