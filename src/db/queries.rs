@@ -1,36 +1,11 @@
 use std::collections::HashSet;
 
 use chrono::NaiveDate;
-use rusqlite::{Error, params, params_from_iter, Connection, OptionalExtension, Result, ToSql, Transaction};
+use rusqlite::{params, Connection, OptionalExtension, Result, Transaction};
 
 use crate::{cli::structs::Command, err_exit};
 
 use super::models::{Bike, Category};
-
-pub fn delete_with_id_set(conn: &mut Connection, id_set: Vec<u32>, table: String) -> Result<usize, Error> {
-    let mut sql: String = format!( 
-        "DELETE
-        FROM {}
-        WHERE 
-        ",
-        &table
-    );
-    let mut where_sql: Vec<String> = vec![];
-    let mut dyn_params: Vec<Box<dyn ToSql>> = Vec::new();
-
-    for id in id_set {
-        where_sql.push(format!("id = ?{}", where_sql.len() + 1));
-        dyn_params.push(Box::new(id));
-    }
-
-    sql.push_str(where_sql.join(" OR ").as_str());
-
-    conn.execute(
-        &sql, 
-        params_from_iter(dyn_params.iter().map(|b| b.as_ref()))
-    )
-
-}
 
 pub fn delete_unused_tags(conn: &mut Connection) -> Result<Vec<String>> {
     let mut deleted_tags: Vec<String> = vec![];

@@ -2,7 +2,7 @@ use owo_colors::OwoColorize;
 use rusqlite::{Connection, Result, ToSql, params, params_from_iter};
 
 use crate::cli::structs::Command;
-use crate::db::queries::{delete_unused_tags, delete_with_id_set};
+use crate::db::queries::delete_unused_tags;
 use crate::{err_exit, suc_exit};
 
 use super::helpers;
@@ -54,6 +54,34 @@ pub fn route(mut conn: Connection, mut command: Command) -> Result<()> {
         "tag" => tag(&conn, command),
         _ => Ok(()),
     }
+}
+
+fn delete_with_id_set(
+    conn: &mut Connection,
+    id_set: Vec<u32>,
+    table: String,
+) -> Result<usize, rusqlite::Error> {
+    let mut sql: String = format!(
+        "DELETE
+        FROM {}
+        WHERE 
+        ",
+        &table
+    );
+    let mut where_sql: Vec<String> = vec![];
+    let mut dyn_params: Vec<Box<dyn ToSql>> = Vec::new();
+
+    for id in id_set {
+        where_sql.push(format!("id = ?{}", where_sql.len() + 1));
+        dyn_params.push(Box::new(id));
+    }
+
+    sql.push_str(where_sql.join(" OR ").as_str());
+
+    conn.execute(
+        &sql,
+        params_from_iter(dyn_params.iter().map(|b| b.as_ref())),
+    )
 }
 
 fn bike(conn: &mut Connection, command: Command) -> Result<()> {
