@@ -125,7 +125,10 @@ pub fn clean_id(conn: &Connection, command: &mut Command, obj: &str) -> Result<(
 pub mod get {
     use rusqlite::params;
 
-    use crate::db::models::{BikeInfo, CategoryInfo};
+    use crate::db::{
+        models::{BikeInfo, CategoryInfo},
+        queries::get_category,
+    };
 
     use super::*;
 
@@ -249,6 +252,12 @@ pub mod get {
             CategoryInfo::from_row,
         )?;
         Ok(info)
+    }
+
+    pub fn get_category_or_exit(conn: &Connection, abbr: &str) -> Result<Category> {
+        get_category(conn, abbr)?.ok_or_else(|| {
+            err_exit!(format!("category - '{}' does not exist.", abbr));
+        })
     }
 
     pub fn tag(conn: &Connection) -> Result<Vec<String>> {

@@ -3,7 +3,8 @@ use rusqlite::{Connection, Result, params};
 
 use crate::cli::structs::Command;
 use crate::db::models::{Bike, Buy, Category, ChainLubrication, Ride};
-use crate::db::queries::{get_bike, get_category, delete_unused_tags, tag_get_or_create_tx};
+use crate::db::queries::{delete_unused_tags, get_bike, get_category, tag_get_or_create_tx};
+use crate::handlers::helpers::get::get_category_or_exit;
 use crate::{err_exit, suc_exit};
 
 use super::helpers;
@@ -63,7 +64,7 @@ fn bike(conn: &Connection, command: Command, id: u32) -> Result<()> {
     )?;
 
     if command.category.is_some() && command.category.unwrap() != category_abbr {
-        let cat: Category = get_category(conn, command.category.unwrap().as_str()).unwrap();
+        let cat: Category = get_category_or_exit(conn, command.category.unwrap().as_str())?;
         category_abbr = cat.abbr;
 
         let id_in_cat: i32 = conn.query_row(
@@ -164,7 +165,7 @@ fn buy(conn: &mut Connection, command: Command, id: u32) -> Result<()> {
         let abbr: &str = category.as_str();
         target.push_str(abbr);
         target.push(':');
-        cat = Some(get_category(conn, abbr)?);
+        cat = Some(get_category_or_exit(conn, abbr)?);
 
         if let Some(bike_id) = command.bike_id.get() {
             target.push_str(&bike_id.to_string());

@@ -8,6 +8,7 @@ use crate::cli::structs::Command;
 use crate::db::models::{Bike, Category};
 use crate::db::queries::{get_bike, get_category, get_lub_info, tag_get_or_create_tx};
 use crate::err_exit;
+use crate::handlers::helpers::get::get_category_or_exit;
 
 pub fn route(mut conn: Connection, command: Command) -> Result<()> {
     let obj = if let Some(obj) = command.object.get() {
@@ -59,7 +60,7 @@ fn bike(conn: &Connection, command: Command) -> Result<()> {
     }
 
     let date: NaiveDate = command.date.to_naive();
-    let cat: Category = get_category(conn, command.category.unwrap().as_str()).unwrap();
+    let cat: Category = get_category_or_exit(conn, command.category.unwrap().as_str())?;
     let name: String = command.annotation.join(" ");
 
     let mut id_in_cat: i32 = conn
@@ -156,7 +157,7 @@ fn buy(conn: &mut Connection, command: Command) -> Result<()> {
     // 2. Категорія і байк
     let mut fk_id: HashMap<&str, i32> = HashMap::new();
     if let Some(cat_name) = &command.category.get() {
-        let cat: Category = get_category(&tx, cat_name.as_str())?;
+        let cat: Category = get_category_or_exit(&tx, cat_name.as_str())?;
         fk_id.insert("cat_id", cat.id);
 
         if let Some(bike_id_val) = command.bike_id.get() {

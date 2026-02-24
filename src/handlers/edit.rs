@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
 use owo_colors::OwoColorize;
+use rusqlite::ffi::SQLITE_FCNTL_WIN32_AV_RETRY;
 use rusqlite::{Connection, Error, ErrorCode, Result, ToSql, params, params_from_iter};
 
 use crate::cli::structs::Command;
@@ -8,6 +9,7 @@ use crate::db::models::{BikeList, BuyList, Category, ChainLubricationList, RideL
 use crate::db::queries::{
     delete_unused_tags, get_bike, get_category, tag_get_or_create, tag_get_or_create_tx,
 };
+use crate::handlers::helpers::get::get_category_or_exit;
 use crate::{err_exit, warn};
 
 use super::helpers::{self, BuyResult, RideResult};
@@ -58,7 +60,11 @@ fn bike(conn: &Connection, command: Command) -> Result<()> {
         if bike_cod != bike.code {
             let cod_parts: Vec<&str> = bike.code.splitn(2, ":").collect();
             let id_in_cat: Option<i32> = cod_parts[1].parse::<i32>().ok();
-            let cat: i32 = get_category(conn, cod_parts[0])?.id;
+            let Some(category) = get_category(conn, cod_parts[0])? else {
+                warn!(format!("category - '{}' does not exist.", cod_parts[0]));
+                continue;
+            };
+            let cat = category.id;
 
             if let Some(id_in_cat) = id_in_cat {
                 let exist: bool = conn.query_row(
@@ -150,7 +156,11 @@ fn buy(conn: &mut Connection, command: Command) -> Result<()> {
             let abbr: &str = target_code[0].as_str();
 
             if !target_code[0].is_empty() {
-                category_id = Some(get_category(conn, abbr)?.id)
+                let Some(category) = get_category(conn, abbr)? else {
+                    warn!(format!("category - '{}' does not exist.", abbr));
+                    continue;
+                };
+                category_id = Some(category.id)
             };
 
             if target_code.len() > 1 && !target_code[1].is_empty() {

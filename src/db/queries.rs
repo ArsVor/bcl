@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use chrono::NaiveDate;
-use rusqlite::{params, Connection, OptionalExtension, Result, Transaction};
+use rusqlite::{Connection, OptionalExtension, Result, Transaction, params};
 
 use crate::{cli::structs::Command, err_exit};
 
@@ -122,8 +122,8 @@ pub fn get_buy_id_with_tag(conn: &Connection, table: &str, name: &str) -> Result
     Ok(result)
 }
 
-pub fn get_category(conn: &Connection, abbr: &str) -> Result<Category> {
-    conn.query_row(
+pub fn get_category(conn: &Connection, abbr: &str) -> Result<Option<Category>> {
+    match conn.query_row(
         "SELECT 
             c.id as id,
             c.abbr as abbr,
@@ -133,13 +133,11 @@ pub fn get_category(conn: &Connection, abbr: &str) -> Result<Category> {
         WHERE abbr = ?1",
         params![abbr],
         Category::from_row,
-    )
-    .map_err(|e| match e {
-        rusqlite::Error::QueryReturnedNoRows => {
-            err_exit!(format!("category - '{}' does not exist.", &abbr));
-        }
-        _ => e,
-    })
+    ) {
+        Ok(category) => Ok(Some(category)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(e),
+    }
 }
 
 pub fn get_included_excluded(
