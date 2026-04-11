@@ -12,6 +12,7 @@ use crate::output;
 use crate::{err_exit, suc_exit};
 
 use super::helpers;
+use super::helpers::get::get_bike_or_exit;
 
 pub fn route(conn: Connection, mut command: Command) -> Result<()> {
     let obj = if let Some(obj) = command.object.get() {
@@ -44,7 +45,7 @@ fn bike(conn: &Connection, command: Command) -> Result<()> {
         id as i32
     } else if let Some(id) = command.bike_id.get() {
         if let Some(abbr) = command.category.get() {
-            queries::get_bike(conn, &abbr, id)?.id
+            get_bike_or_exit(conn, &abbr, id)?.id
         } else {
             err_exit!("Bike for your request was not found.");
         }

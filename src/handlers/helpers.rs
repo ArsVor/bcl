@@ -126,8 +126,8 @@ pub mod get {
     use rusqlite::params;
 
     use crate::db::{
-        models::{BikeInfo, CategoryInfo},
-        queries::get_category,
+        models::{Bike, BikeInfo, CategoryInfo},
+        queries::{get_bike, get_category},
     };
 
     use super::*;
@@ -252,6 +252,12 @@ pub mod get {
             CategoryInfo::from_row,
         )?;
         Ok(info)
+    }
+
+    pub fn get_bike_or_exit(conn: &Connection, abbr: &str, bike_id: u8) -> Result<Bike> {
+        get_bike(conn, abbr, bike_id)?.ok_or_else(|| {
+            err_exit!(format!("bike - '{}:{}' does not exist.", &abbr, &bike_id));
+        })
     }
 
     pub fn get_category_or_exit(conn: &Connection, abbr: &str) -> Result<Category> {

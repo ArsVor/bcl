@@ -38,20 +38,18 @@ pub fn delete_unused_tags(conn: &mut Connection) -> Result<Vec<String>> {
     Ok(deleted_tags)
 }
 
-pub fn get_bike(conn: &Connection, abbr: &str, bike_id: u8) -> Result<Bike> {
-    conn.query_row(
+pub fn get_bike(conn: &Connection, abbr: &str, bike_id: u8) -> Result<Option<Bike>> {
+    match conn.query_row(
         "SELECT * FROM bike b
              JOIN category c ON c.id = b.category_id
              WHERE c.abbr = ?1 AND b.id_in_cat = ?2",
         params![abbr, bike_id],
         Bike::from_row,
-    )
-    .map_err(|e| match e {
-        rusqlite::Error::QueryReturnedNoRows => {
-            err_exit!(format!("bike - '{}:{}' does not exist.", &abbr, &bike_id));
-        }
-        _ => e,
-    })
+    ) {
+        Ok(bike) => Ok(Some(bike)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(e),
+    }
 }
 
 pub fn get_buy_id_with_bike(conn: &Connection, bike_id: i32) -> Result<HashSet<i32>> {

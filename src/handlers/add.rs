@@ -8,7 +8,7 @@ use crate::cli::structs::Command;
 use crate::db::models::{Bike, Category};
 use crate::db::queries::{get_bike, get_category, get_lub_info, tag_get_or_create_tx};
 use crate::err_exit;
-use crate::handlers::helpers::get::get_category_or_exit;
+use crate::handlers::helpers::get::{get_bike_or_exit, get_category_or_exit};
 
 pub fn route(mut conn: Connection, command: Command) -> Result<()> {
     let obj = if let Some(obj) = command.object.get() {
@@ -95,7 +95,7 @@ fn chain_lub(conn: &Connection, command: Command) -> Result<()> {
     }
 
     let date: NaiveDate = command.date.to_naive();
-    let bike: Bike = get_bike(
+    let bike: Bike = get_bike_or_exit(
         conn,
         command.category.unwrap().as_str(),
         command.bike_id.unwrap(),
@@ -161,7 +161,7 @@ fn buy(conn: &mut Connection, command: Command) -> Result<()> {
         fk_id.insert("cat_id", cat.id);
 
         if let Some(bike_id_val) = command.bike_id.get() {
-            let bike: Bike = get_bike(&tx, cat_name.as_str(), bike_id_val)?;
+            let bike: Bike = get_bike_or_exit(&tx, cat_name.as_str(), bike_id_val)?;
             fk_id.insert("bike_id", bike.id);
         }
     }
@@ -219,7 +219,7 @@ fn ride(conn: &mut Connection, command: Command) -> Result<()> {
     }
 
     let date: NaiveDate = command.date.to_naive();
-    let bike: Bike = get_bike(
+    let bike: Bike = get_bike_or_exit(
         conn,
         command.category.unwrap().as_str(),
         command.bike_id.unwrap(),
