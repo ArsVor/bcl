@@ -110,7 +110,6 @@ pub fn clean_id(conn: &Connection, command: &mut Command, obj: &str) -> Result<(
         }
         (true, true) => id_vec,
     };
-    println!("cleaned_id: {:?}", &command.cleaned_id);
 
     if command.cleaned_id.is_empty() {
         suc_exit!("Your request didn't match any result. Nothing to do!")

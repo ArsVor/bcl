@@ -13,9 +13,9 @@ pub fn delete_unused_tags(conn: &mut Connection) -> Result<Vec<String>> {
         "SELECT t.name
         FROM tag t
         WHERE 
-        (SELECT COUNT(tb.id) FROM tag_to_buy tb WHERE tb.tag_id = t.id) = 0
+        (SELECT COUNT(*) FROM tag_to_buy tb WHERE tb.tag_id = t.id) = 0
         AND
-        (SELECT COUNT(tr.id) FROM tag_to_ride tr WHERE tr.tag_id = t.id) = 0
+        (SELECT COUNT(*) FROM tag_to_ride tr WHERE tr.tag_id = t.id) = 0
         ",
     )?;
 

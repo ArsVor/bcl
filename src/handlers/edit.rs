@@ -6,9 +6,7 @@ use rusqlite::{Connection, Error, ErrorCode, Result, ToSql, params, params_from_
 
 use crate::cli::structs::Command;
 use crate::db::models::{BikeList, BuyList, Category, ChainLubricationList, RideList};
-use crate::db::queries::{
-    delete_unused_tags, get_bike, get_category, tag_get_or_create_tx,
-};
+use crate::db::queries::{delete_unused_tags, get_bike, get_category, tag_get_or_create_tx};
 use crate::{err_exit, warn};
 
 use super::helpers::{self, BuyResult, RideResult};
@@ -62,12 +60,10 @@ fn bike(conn: &Connection, command: Command) -> Result<()> {
             let cat = category.id;
 
             let Some(id_in_cat) = id_in_cat else {
-                warn!(
-                    format!(
-                        "Incorrect bike code format. Skepped. \nExpected `[abbr]:[int]`, but given - {}.", 
-                        &bike.code
-                        )
-                    );
+                warn!(format!(
+                    "Incorrect bike code format. Skepped. \nExpected `[abbr]:[int]`, but given - {}.",
+                    &bike.code
+                ));
                 continue;
             };
 
@@ -171,7 +167,8 @@ fn buy(conn: &mut Connection, command: Command) -> Result<()> {
                 let Some(id) = parsed_id else {
                     warn!(format!(
                         "Incorrect target code format. \nExpected `[abbr]:[int]`, but given - {}",
-                        &buy.target));
+                        &buy.target
+                    ));
                     continue;
                 };
 
@@ -254,41 +251,46 @@ fn buy(conn: &mut Connection, command: Command) -> Result<()> {
 
             if !tags_to_add.is_empty() {
                 for tag_name in tags_to_add {
-                    match tag_name.as_str()  {
+                    match tag_name.as_str() {
                         s if regex_is_match!(r"^\w+$", s) => {
                             let tag_id = tag_get_or_create_tx(&tx, tag_name.as_str())?;
                             tx.execute(
                                 "INSERT INTO tag_to_buy (tag_id, buy_id) VALUES (?1, ?2)",
-                                params![tag_id, buy.self_id])?;
-                    },
-                    _ => {
-                        warn!(format!("Incorrect tag: '{}'. Skepped.", &tag_name));
-                        continue;
+                                params![tag_id, buy.self_id],
+                            )?;
+                        }
+                        _ => {
+                            warn!(format!("Incorrect tag: '{}'. Skepped.", &tag_name));
+                            continue;
+                        }
                     }
                 }
             }
-            }
 
             if !tags_to_del.is_empty() {
-                let mut tag_id_query: Vec<String> = vec![];
-                for tag_name in &tags_to_del {
-                    tag_id_query.push(format!(
-                        "tag_id = (SELECT t.id FROM tag t WHERE t.name = '{}')",
-                        &tag_name
-                    ));
+                let placeholders = vec!["?"; tags_to_del.len()].join(", ");
+
+                let query = format!(
+                    "DELETE FROM tag_to_buy 
+                     WHERE buy_id = ? 
+                     AND tag_id IN (
+                         SELECT id FROM tag WHERE name IN ({})
+                     )",
+                    &placeholders
+                );
+
+                let mut params_vec: Vec<&dyn rusqlite::ToSql> = vec![&buy.self_id];
+                for tag in &tags_to_del {
+                    params_vec.push(tag);
                 }
 
-                tx.execute(
-                    "DELETE FROM tag_to_buy WHERE buy_id = ?1 AND ?2",
-                    params![buy.self_id, format!("({})", tag_id_query.join(" OR "))],
-                )?;
+                tx.execute(&query, params_vec.as_slice())?;
             }
         }
 
         tx.commit()?;
 
         let deleted_tags: Vec<String> = delete_unused_tags(conn)?;
-        println!("DELETED_TAGS: {:?}", &deleted_tags);
 
         println!(
             "{}",
@@ -368,7 +370,6 @@ fn chain_lub(conn: &Connection, command: Command) -> Result<()> {
     let lubs: Vec<ChainLubricationList> = helpers::get::chain_lub(conn, command)?;
 
     for lub_def in lubs {
-
         let lub: ChainLubricationList =
             helpers::editor::edit_lub(lub_def.clone()).expect("failed to edit lub");
 
@@ -393,7 +394,8 @@ fn chain_lub(conn: &Connection, command: Command) -> Result<()> {
         ];
 
         if lub.bike != lub_def.bike {
-            let bike_code: Vec<String> = lub.bike.clone().split(":").map(|s| s.to_string()).collect();
+            let bike_code: Vec<String> =
+                lub.bike.clone().split(":").map(|s| s.to_string()).collect();
             let abbr: &str = bike_code[0].as_str();
             let Ok(id_in_cat) = bike_code[1].parse() else {
                 warn!(format!(
@@ -445,8 +447,8 @@ fn ride(conn: &mut Connection, command: Command) -> Result<()> {
     };
 
     for ride_def in rides {
-
-        let ride: RideList = helpers::editor::edit_ride(ride_def.clone()).expect("failed to edit ride");
+        let ride: RideList =
+            helpers::editor::edit_ride(ride_def.clone()).expect("failed to edit ride");
 
         let annotation: String = if !ride.annotation.is_empty() {
             format!("\"{}\"", &ride.annotation)
@@ -461,7 +463,7 @@ fn ride(conn: &mut Connection, command: Command) -> Result<()> {
                 let mut t = String::from(s);
                 if !t.is_empty() {
                     t.insert(0, '+');
-                }    
+                }
                 t
             })
             .collect::<Vec<String>>()
@@ -492,12 +494,10 @@ fn ride(conn: &mut Connection, command: Command) -> Result<()> {
             let id_in_cat: Option<u8> = bike_code[1].parse().ok();
 
             let Some(id) = id_in_cat else {
-                warn!(
-                    format!(
-                        "Incorrect bike code format. Skepped. \nExpected `[abbr]:[int]`, but given - {}.", 
-                        &ride.bike
-                        )
-                    );
+                warn!(format!(
+                    "Incorrect bike code format. Skepped. \nExpected `[abbr]:[int]`, but given - {}.",
+                    &ride.bike
+                ));
                 continue;
             };
 
@@ -524,9 +524,7 @@ fn ride(conn: &mut Connection, command: Command) -> Result<()> {
 
         if ride.tags != ride_def.tags {
             let tags_to_add: HashSet<String> = helpers::tags_diff(&ride.tags, &ride_def.tags);
-            // err_exit!(format!("TG_TO_ADD: {:?}", &tags_to_add));
             let tags_to_del: HashSet<String> = helpers::tags_diff(&ride_def.tags, &ride.tags);
-            println!("TG_TO_DEL: {:?}", &tags_to_del);
 
             if !tags_to_add.is_empty() {
                 for tag_name in tags_to_add {
@@ -539,19 +537,23 @@ fn ride(conn: &mut Connection, command: Command) -> Result<()> {
             }
 
             if !tags_to_del.is_empty() {
-                let mut tag_id_query: Vec<String> = vec![];
-                for tag_name in &tags_to_del {
-                    tag_id_query.push(format!(
-                        "tag_id = (SELECT id FROM tag WHERE name = '{}')",
-                        &tag_name
-                    ));
-                }
-                println!("TAGS: {:?}", &tag_id_query);
+                let placeholders = vec!["?"; tags_to_del.len()].join(", ");
 
-                tx.execute(
-                    "DELETE FROM tag_to_ride WHERE ride_id = ?1 AND ?2",
-                    params![ride.id, format!("({})", tag_id_query.join(" OR "))],
-                )?;
+                let query = format!(
+                    "DELETE FROM tag_to_ride 
+                     WHERE ride_id = ? 
+                     AND tag_id IN (
+                         SELECT id FROM tag WHERE name IN ({})
+                     )",
+                    &placeholders
+                );
+
+                let mut params_vec: Vec<&dyn rusqlite::ToSql> = vec![&ride.ride_id];
+                for tag in &tags_to_del {
+                    params_vec.push(tag);
+                }
+
+                tx.execute(&query, params_vec.as_slice())?;
             }
         }
 
