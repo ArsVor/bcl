@@ -265,6 +265,22 @@ pub mod get {
         })
     }
 
+    pub fn get_next_id_in_cat(conn: &Connection, category_id: i32) -> i32 {
+        let id_in_cat: i32 = conn
+            .query_row(
+                "SELECT id_in_cat
+                FROM bike
+                WHERE category_id = ?1
+                ORDER BY id DESC
+                LIMIT 1",
+                params![category_id],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
+
+        id_in_cat + 1
+    }
+
     pub fn tag(conn: &Connection) -> Result<Vec<String>> {
         let mut stmt = conn.prepare("SELECT name FROM tag")?;
         let tag_iter = stmt.query_map([], |row| row.get::<_, String>(0))?;
@@ -832,6 +848,16 @@ pub mod get {
         if let Some(bike_id) = bike_id {
             where_sql.push(format!("b.id_in_cat = ?{}", where_sql.len() + 1));
             dyn_params.push(Box::new(bike_id));
+        }
+
+        if let Some(val) = command.val_lt.get() {
+            where_sql.push(format!("l.distance < ?{}", where_sql.len() + 1));
+            dyn_params.push(Box::new(val));
+        }
+
+        if let Some(val) = command.val_gt.get() {
+            where_sql.push(format!("l.distance > ?{}", where_sql.len() + 1));
+            dyn_params.push(Box::new(val));
         }
 
         if !command.annotation.is_empty() {

@@ -39,6 +39,7 @@ pub struct Command {
     pub include_tags: HashSet<String>,
     pub exclude_tags: HashSet<String>,
     pub cleaned: bool,
+    pub update_data: Field<Box<Command>>,
 }
 
 impl<T> Field<T> {
@@ -343,6 +344,7 @@ impl Command {
             include_tags: HashSet::new(),
             exclude_tags: HashSet::new(),
             cleaned: false,
+            update_data: Field::new(),
         }
     }
 
@@ -360,6 +362,11 @@ impl Command {
 
         for arg in args.into_iter() {
             match arg.as_str() {
+                "#~~#" => {
+                    command
+                        .funk
+                        .set_or_err(Some(" ".to_string()), "unreachable");
+                }
                 "add" | "del" | "mod" | "edit" | "list" | "info" | "sync" => {
                     command
                         .funk
@@ -374,6 +381,18 @@ impl Command {
                     command
                         .object
                         .set_or_err(Some(arg), "multiple object input.");
+                }
+                s if s.starts_with("\\") => {
+                    command
+                        .annotation
+                        .push(s.strip_prefix("\\").unwrap_or_default().to_string());
+                }
+                s if s.starts_with("upd:") => {
+                    if let Some(update_data) = s.strip_prefix("upd:") {
+                        command
+                            .update_data
+                            .set(parser::update_data_parse(update_data.to_string()));
+                    }
                 }
                 s if s.contains(':') => {
                     command = parser::named_parse(command, arg);

@@ -17,7 +17,7 @@ fn main() {
     if !args.is_empty() {
         let conn: Connection = open_connection_with_fk("./bcl.db").unwrap();
         let command: Command = Command::from(args);
-        // println!("COMMAND: {:?}", &command);
+        // println!("COMMAND: {:#?}", &command);
         // suc_exit!("Done");
 
         let funk = command.funk.unwrap();
@@ -27,15 +27,7 @@ fn main() {
             "edit" => handlers::edit::route(conn, command),
             "info" => handlers::info::route(conn, command),
             "list" => handlers::list::route(conn, command),
-            "mod" => {
-                if !command.cleaned_id.is_empty()
-                    || command.object.unwrap_or(String::new()) == "tag"
-                {
-                    handlers::update::rote(conn, command)
-                } else {
-                    handlers::edit::route(conn, command)
-                }
-            }
+            "mod" => handlers::update::rote(conn, command),
             _ => Ok(()),
         };
 

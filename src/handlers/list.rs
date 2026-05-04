@@ -82,7 +82,7 @@ fn bike(conn: &Connection, command: Command) -> Result<()> {
 fn buy(conn: &Connection, command: Command) -> Result<()> {
     let result: BuyResult = helpers::get::buy(conn, command)?;
 
-    let buys = if let helpers::BuyResult::List(buys) = result {
+    let buys: Vec<BuyList> = if let helpers::BuyResult::List(buys) = result {
         buys
     } else {
         unreachable!()

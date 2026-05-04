@@ -8,6 +8,7 @@ use crate::cli::structs::Command;
 use crate::db::models::{Bike, Category};
 use crate::db::queries::{get_bike, get_category, get_lub_info, tag_get_or_create_tx};
 use crate::err_exit;
+use crate::handlers::helpers;
 use crate::handlers::helpers::get::{get_bike_or_exit, get_category_or_exit};
 
 pub fn route(mut conn: Connection, command: Command) -> Result<()> {
@@ -63,19 +64,7 @@ fn bike(conn: &Connection, command: Command) -> Result<()> {
     let cat: Category = get_category_or_exit(conn, command.category.unwrap().as_str())?;
     let name: String = command.annotation.join(" ");
 
-    let mut id_in_cat: i32 = conn
-        .query_row(
-            "SELECT id_in_cat
-        FROM bike
-        WHERE category_id = ?1
-        ORDER BY id DESC
-        LIMIT 1",
-            params![cat.id],
-            |row| row.get(0),
-        )
-        .unwrap_or(0);
-
-    id_in_cat += 1;
+    let id_in_cat: i32 = helpers::get::get_next_id_in_cat(conn, cat.id);
 
     conn.execute(
         "INSERT INTO bike (category_id, id_in_cat, name, datestamp) VALUES (?1, ?2, ?3, ?4)",

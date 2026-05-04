@@ -180,3 +180,24 @@ pub fn multiple_id_pars(val: String) -> Vec<u32> {
 
     id_vec
 }
+
+pub fn update_data_parse(data_str: String) -> Option<Box<Command>> {
+    let mut args: Vec<String> = data_str
+        .split(" ")
+        .filter(|p| !p.is_empty())
+        .map(|p| p.to_string())
+        .collect();
+
+    // println!("{:?}", &args);
+    if args.is_empty() {
+        return None;
+    } else {
+        args.push("#~~#".to_string());
+
+        if regex_is_match!(r"^\d+$", args[0].as_str()) {
+            args[0] = format!("val:{}", args[0]);
+        }
+    }
+
+    Some(Box::new(Command::from(args)))
+}

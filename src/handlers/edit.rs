@@ -22,6 +22,7 @@ pub fn route(mut conn: Connection, mut command: Command) -> Result<()> {
     };
 
     _ = helpers::clean_id(&conn, &mut command, obj.as_str());
+    // crate::suc_exit!(format!("CLEANED ID: {:?}", command.cleaned_id));
 
     match obj.as_str() {
         "bike" => bike(&conn, command),
