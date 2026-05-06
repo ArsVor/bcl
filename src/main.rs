@@ -27,7 +27,7 @@ fn main() {
             "edit" => handlers::edit::route(conn, command),
             "info" => handlers::info::route(conn, command),
             "list" => handlers::list::route(conn, command),
-            "mod" => handlers::update::rote(conn, command),
+            "mod" => handlers::update::route(conn, command),
             _ => Ok(()),
         };
 

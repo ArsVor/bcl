@@ -289,11 +289,14 @@ impl Date {
     }
 
     pub fn date_or_first(&self) -> NaiveDate {
-        if let Some(date) = NaiveDate::from_ymd_opt(
-            self.year_or_now(),
-            self.month_or_first(),
-            self.day_or_first(),
-        ) {
+        let month = if self.day.is_some() {
+            self.month_or_now()
+        } else {
+            self.month_or_first()
+        };
+
+        if let Some(date) = NaiveDate::from_ymd_opt(self.year_or_now(), month, self.day_or_first())
+        {
             date
         } else {
             err_exit!("Non valid date given.");

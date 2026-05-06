@@ -639,6 +639,8 @@ pub mod get {
             }
         }
 
+        println!("GT: {:?}", &date_gt);
+
         let val: Field<f32> = command.val.clone();
         let val_gt: Field<f32> = command.val_gt.clone();
         let val_lt: Field<f32> = command.val_lt.clone();

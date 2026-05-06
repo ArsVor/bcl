@@ -1,6 +1,8 @@
+use std::collections::HashSet;
+
 use chrono::NaiveDate;
 use owo_colors::OwoColorize;
-use owo_colors::colors::xterm::VerdunGreen;
+use owo_colors::colors::xterm::{ElectricIndigo, VerdunGreen};
 use rusqlite::{Connection, Result, ToSql, params, params_from_iter};
 
 use crate::cli::structs::Command;
@@ -11,7 +13,7 @@ use crate::{err_exit, suc_exit, warn};
 
 use super::helpers;
 
-pub fn rote(mut conn: Connection, mut command: Command) -> Result<()> {
+pub fn route(mut conn: Connection, mut command: Command) -> Result<()> {
     let obj = if let Some(obj) = command.object.get() {
         obj
     } else {
@@ -37,7 +39,7 @@ pub fn rote(mut conn: Connection, mut command: Command) -> Result<()> {
         // "buy" => buy(&mut conn, command),
         "cat" => cat(&conn, command),
         "lub" => lub(&conn, command),
-        // "ride" => ride(&mut conn, command),
+        "ride" => ride(&mut conn, command),
         _ => Ok(()),
     }
 }
@@ -57,8 +59,8 @@ fn bike(conn: &Connection, command: Command) -> Result<()> {
         let id_in_cat: i32 = helpers::get::get_next_id_in_cat(conn, category_id);
         let formatted: String = format!("{}:{} ", &abbr, &id_in_cat);
 
-        set_sql.push("category_id = ?".to_string());
-        set_sql.push("id_in_cat = ?".to_string());
+        set_sql.push("category_id = ?".into());
+        set_sql.push("id_in_cat = ?".into());
         dyn_params.push(Box::new(category_id));
         dyn_params.push(Box::new(id_in_cat));
 
@@ -71,7 +73,7 @@ fn bike(conn: &Connection, command: Command) -> Result<()> {
         let name = update_data.annotation.join(" ");
         let formatted = format!("\"{}\" ", &name);
 
-        set_sql.push("name = ?".to_string());
+        set_sql.push("name = ?".into());
         dyn_params.push(Box::new(name));
 
         formatted
@@ -82,7 +84,7 @@ fn bike(conn: &Connection, command: Command) -> Result<()> {
     let updated_date = if update_data.date.is_some() {
         let date: NaiveDate = update_data.date.to_naive();
         let formatted = format!("{}", &date);
-        set_sql.push("datestamp = ?".to_string());
+        set_sql.push("datestamp = ?".into());
         dyn_params.push(Box::new(date));
         formatted
     } else {
@@ -282,7 +284,7 @@ fn cat(conn: &Connection, command: Command) -> Result<()> {
     let update_data = command.update_data.unwrap();
 
     let updated_abbr = if let Some(abbr) = update_data.category.get() {
-        set_sql.push("abbr = ?".to_string());
+        set_sql.push("abbr = ?".into());
 
         let formatted = format!("{}: ", &abbr);
         dyn_params.push(Box::new(abbr));
@@ -296,7 +298,7 @@ fn cat(conn: &Connection, command: Command) -> Result<()> {
         let annotation = update_data.annotation.join(" ");
         let formatted = format!("\"{}\"", &annotation);
 
-        set_sql.push("name = ?".to_string());
+        set_sql.push("name = ?".into());
         dyn_params.push(Box::new(annotation));
 
         formatted
@@ -340,14 +342,14 @@ fn lub(conn: &Connection, command: Command) -> Result<()> {
     if !update_data.annotation.is_empty() {
         let annotation: String = update_data.annotation.join(" ");
         updated_annotation = format!("\"{}\"", &annotation);
-        set_sql.push("annotation = ?".to_string());
+        set_sql.push("annotation = ?".into());
         dyn_params.push(Box::new(annotation));
     }
 
     if update_data.date.is_some() {
         let date: NaiveDate = update_data.date.to_naive();
         updated_date = format!("{} ", &date);
-        set_sql.push("datestamp = ?".to_string());
+        set_sql.push("datestamp = ?".into());
         dyn_params.push(Box::new(date));
     }
 
@@ -357,7 +359,7 @@ fn lub(conn: &Connection, command: Command) -> Result<()> {
             update_data.category.unwrap().as_str(),
             update_data.bike_id.unwrap(),
         )?;
-        set_sql.push("bike_id = ?".to_string());
+        set_sql.push("bike_id = ?".into());
         dyn_params.push(Box::new(bike.id));
 
         bike_abbr = format!(
@@ -369,13 +371,14 @@ fn lub(conn: &Connection, command: Command) -> Result<()> {
 
     if let Some(val) = update_data.val.get() {
         updated_val = format!("{}km ", &val);
-        set_sql.push("distance = ?".to_string());
+        set_sql.push("distance = ?".into());
         dyn_params.push(Box::new(val));
     }
 
     if set_sql.is_empty() {
         suc_exit!("Nothing to do!");
     }
+
     let placeholders = std::iter::repeat_n("?", command.cleaned_id.len())
         .collect::<Vec<_>>()
         .join(",");
@@ -416,159 +419,175 @@ fn lub(conn: &Connection, command: Command) -> Result<()> {
     Ok(())
 }
 
-// fn ride(conn: &mut Connection, command: Command) -> Result<()> {
-//     if command.val.is_none()
-//         && command.date.is_none()
-//         && command.category.is_none()
-//         && command.bike_id.is_none()
-//         && command.include_tags.is_empty()
-//         && command.exclude_tags.is_empty()
-//         && command.annotation.is_empty()
-//     {
-//         suc_exit!("Nothing to do!");
-//     }
-//
-//     if command.category.is_some() && command.bike_id.is_none() {
-//         err_exit!(format!(
-//             "Params missed expected: '[category]:[bike_id]', but given '{}:'.",
-//             &command.category.unwrap()
-//         ));
-//     }
-//
-//     let mut ride: Ride = conn.query_row(
-//         "SELECT
-//             r.id AS ride_id,
-//             r.bike_id AS bike_id,
-//             r.datestamp AS datestamp,
-//             r.distance AS distance,
-//             c.abbr AS cat,
-//             b.id_in_cat AS id_in_cat,
-//             COALESCE(r.annotation, '') AS ann,
-//             COALESCE(GROUP_CONCAT(t.name, ', '), '') AS tags
-//         FROM ride r
-//         JOIN bike b ON b.id = r.bike_id
-//         JOIN category c ON c.id = b.category_id
-//         LEFT JOIN tag_to_ride tr ON tr.ride_id = r.id
-//         LEFT JOIN tag t ON t.id = tr.tag_id
-//         WHERE r.id = ?1
-//         GROUP BY r.id",
-//         params![id],
-//         Ride::from_row,
-//     )?;
-//
-//     let mut tags: Vec<String> = ride.tags.split(", ").map(|s| s.to_string()).collect();
-//
-//     if !command.annotation.is_empty() {
-//         ride.annotation = command.annotation.join(" ");
-//     }
-//
-//     if command.date.is_some() {
-//         ride.datestamp = command.date.to_naive();
-//     }
-//
-//     if let Some(distance) = command.val.get() {
-//         ride.distance = distance;
-//     }
-//
-//     if let (Some(abbr), Some(bike_id)) = (command.category.get(), command.bike_id.get()) {
-//         let bike: Bike = get_bike_or_exit(conn, abbr.as_str(), bike_id)?;
-//         ride.bike_id = bike.id;
-//         ride.abbr = abbr;
-//         ride.id_in_cat = bike_id;
-//     }
-//
-//     let tx = conn.transaction()?;
-//
-//     tx.execute(
-//         "UPDATE ride
-//         SET
-//             bike_id = ?1,
-//             datestamp = ?2,
-//             distance = ?3,
-//             annotation = ?4
-//         WHERE id = ?5
-//         ",
-//         params![
-//             ride.bike_id,
-//             ride.datestamp,
-//             ride.distance,
-//             ride.annotation,
-//             ride.id
-//         ],
-//     )?;
-//
-//     if !command.include_tags.is_empty() {
-//         for tag_name in command.include_tags {
-//             if !tags.contains(&tag_name) {
-//                 tags.push(tag_name.clone());
-//                 let tag_id: i32 = tag_get_or_create_tx(&tx, &tag_name)?;
-//
-//                 tx.execute(
-//                     "INSERT INTO tag_to_ride (tag_id, ride_id) VALUES (?1, ?2)",
-//                     params![tag_id, ride.id],
-//                 )?;
-//             }
-//         }
-//     }
-//
-//     if !command.exclude_tags.is_empty() {
-//         let mut tag_id_query: Vec<String> = vec![];
-//         for tag_name in &command.exclude_tags {
-//             tag_id_query.push(format!(
-//                 "tag_id = (SELECT t.id FROM tag WHERE t.name = '{}')",
-//                 &tag_name
-//             ));
-//         }
-//
-//         tx.execute(
-//             "DELETE FROM tag_to_ride WHERE ride_id = ?1 AND ?2",
-//             params![ride.id, format!("({})", tag_id_query.join(" OR "))],
-//         )?;
-//     }
-//
-//     tx.commit()?;
-//
-//     let deleted_tags: Vec<String> = delete_unused_tags(conn)?;
-//
-//     let tags_str = tags
-//         .into_iter()
-//         .filter(|t| !command.exclude_tags.contains(t))
-//         .map(|mut t| {
-//             t.insert(0, '+');
-//             t
-//         })
-//         .collect::<Vec<_>>()
-//         .join(", ");
-//
-//     let mut annotation: String = String::new();
-//     if !ride.annotation.is_empty() {
-//         annotation = format!("\"{}\"", ride.annotation);
-//     }
-//
-//     println!(
-//         "{}",
-//         format!(
-//             "Ride id:{0} modified to {1}:{2} {3} {4} {5} {6}",
-//             ride.id,
-//             ride.abbr,
-//             ride.id_in_cat,
-//             ride.datestamp,
-//             ride.distance,
-//             &tags_str,
-//             &annotation,
-//         )
-//         .blue()
-//     );
-//
-//     if !deleted_tags.is_empty() {
-//         println!(
-//             "{}",
-//             format!("Deleted tags: {}", deleted_tags.join(", "),).blue()
-//         );
-//     }
-//
-//     Ok(())
-// }
+fn ride(conn: &mut Connection, command: Command) -> Result<()> {
+    let mut set_sql: Vec<String> = Vec::new();
+    let mut dyn_params: Vec<Box<dyn ToSql>> = Vec::new();
+    let update_data: Box<Command> = command.update_data.unwrap();
+
+    let updated_code = match (update_data.category.get(), update_data.bike_id.get()) {
+        (Some(abbr), Some(id_in_cat)) => {
+            let bike_id = helpers::get::get_bike_or_exit(conn, &abbr, id_in_cat)?.id;
+            let formatted: String = format!("{}:{} ", &abbr, &id_in_cat);
+
+            set_sql.push("bike_id = ?".into());
+            dyn_params.push(Box::new(bike_id));
+
+            formatted
+        }
+        (None, None) => String::new(),
+        _ => {
+            err_exit!("Incorrect bike code format. \nExpected `[abbr]:[int]`.");
+        }
+    };
+
+    let updated_annotation = if !update_data.annotation.is_empty() {
+        let annotation = update_data.annotation.join(" ");
+        let formatted = format!("\"{}\" ", &annotation);
+
+        set_sql.push("annotation = ?".into());
+        dyn_params.push(Box::new(annotation));
+
+        formatted
+    } else {
+        String::new()
+    };
+
+    let updated_date = if update_data.date.is_some() {
+        let date: NaiveDate = update_data.date.to_naive();
+        let formatted = format!("{} ", &date);
+        set_sql.push("datestamp = ?".into());
+        dyn_params.push(Box::new(date));
+        formatted
+    } else {
+        String::new()
+    };
+
+    let updated_val = if let Some(val) = update_data.val.get() {
+        let formatted = format!("{}km ", &val);
+        set_sql.push("distance = ?".into());
+        dyn_params.push(Box::new(val));
+        formatted
+    } else {
+        String::new()
+    };
+
+    if set_sql.is_empty()
+        && update_data.include_tags.is_empty()
+        && update_data.exclude_tags.is_empty()
+    {
+        suc_exit!("No data to change. Nothing to do!");
+    }
+
+    let tx = conn.transaction()?;
+
+    if !set_sql.is_empty() {
+        let placeholders = std::iter::repeat_n("?", command.cleaned_id.len())
+            .collect::<Vec<_>>()
+            .join(",");
+
+        for id in &command.cleaned_id {
+            dyn_params.push(Box::new(*id));
+        }
+
+        let sql: String = format!(
+            "UPDATE ride SET {} WHERE id IN ({})",
+            set_sql.join(", "),
+            placeholders
+        );
+
+        tx.execute(
+            &sql,
+            params_from_iter(dyn_params.iter().map(|b| b.as_ref())),
+        )?;
+    }
+
+    if !update_data.include_tags.is_empty() {
+        let mut tag_id_set: Vec<i32> = Vec::new();
+
+        for tag_name in &update_data.include_tags {
+            tag_id_set.push(tag_get_or_create_tx(&tx, tag_name)?);
+        }
+
+        let mut stmt = tx.prepare(
+            "INSERT OR IGNORE INTO tag_to_ride (tag_id, ride_id)
+             VALUES (?, ?)",
+        )?;
+
+        for ride_id in &command.cleaned_id {
+            for tag_id in &tag_id_set {
+                stmt.execute(params![tag_id, ride_id])?;
+            }
+        }
+    }
+
+    if !update_data.exclude_tags.is_empty() {
+        let mut sct_stmt = tx.prepare("SELECT id FROM tag WHERE name = ?")?;
+
+        let tag_ids: HashSet<i32> = update_data
+            .exclude_tags
+            .iter()
+            .filter_map(|name| sct_stmt.query_row([name], |row| row.get(0)).ok())
+            .collect();
+
+        let mut del_stmt =
+            tx.prepare("DELETE FROM tag_to_ride WHERE tag_id = ? AND ride_id = ?")?;
+
+        for ride_id in &command.cleaned_id {
+            for tag in &tag_ids {
+                del_stmt.execute(params![tag, ride_id])?;
+            }
+        }
+    }
+
+    tx.commit()?;
+
+    let deleted_tags: Vec<String> = delete_unused_tags(conn)?;
+
+    let included_tags = update_data
+        .include_tags
+        .into_iter()
+        .map(|t| format!("+{t} "))
+        .collect::<Vec<_>>()
+        .join(",");
+
+    let excluded_tags = update_data
+        .exclude_tags
+        .into_iter()
+        .map(|t| format!("-{t} "))
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    let cleaned_id_str: String = command
+        .cleaned_id
+        .iter()
+        .map(|i| i.to_string())
+        .collect::<Vec<String>>()
+        .join(",");
+
+    println!(
+        "{}",
+        format!(
+            "Ride id:({0}) modified to: {1}{2}{3}{4}{5}{6}",
+            &cleaned_id_str,
+            &updated_code,
+            &updated_date,
+            &updated_val,
+            &included_tags,
+            &excluded_tags,
+            &updated_annotation,
+        )
+        .blue()
+    );
+
+    if !deleted_tags.is_empty() {
+        println!(
+            "{}",
+            format!("Deleted tags: {}", deleted_tags.join(", "),).blue()
+        );
+    }
+
+    Ok(())
+}
 
 fn tag(conn: &mut Connection, command: Command) -> Result<()> {
     if command.include_tags.is_empty() || command.exclude_tags.is_empty() {

@@ -102,7 +102,8 @@ fn create_tag_to_ride_table(conn: &Connection) -> Result<()> {
             tag_id      INTEGER NOT NULL,
             ride_id     INTEGER NOT NULL,
             FOREIGN KEY(tag_id) REFERENCES tag(id) ON DELETE CASCADE,
-            FOREIGN KEY(ride_id) REFERENCES ride(id) ON DELETE CASCADE
+            FOREIGN KEY(ride_id) REFERENCES ride(id) ON DELETE CASCADE,
+            UNIQUE(tag_id, ride_id)
         )",
         [],
     )?;
@@ -116,7 +117,8 @@ fn create_tag_to_buy_table(conn: &Connection) -> Result<()> {
             tag_id      INTEGER NOT NULL,
             buy_id      INTEGER NOT NULL,
             FOREIGN KEY(tag_id) REFERENCES tag(id) ON DELETE CASCADE,
-            FOREIGN KEY(buy_id) REFERENCES buy(id) ON DELETE CASCADE
+            FOREIGN KEY(buy_id) REFERENCES buy(id) ON DELETE CASCADE,
+            UNIQUE(tag_id, buy_id)
         )",
         [],
     )?;
@@ -130,7 +132,8 @@ fn create_buy_to_bike_table(conn: &Connection) -> Result<()> {
             buy_id      INTEGER NOT NULL,
             bike_id     INTEGER NOT NULL,
             FOREIGN KEY(buy_id) REFERENCES buy(id) ON DELETE CASCADE,
-            FOREIGN KEY(bike_id) REFERENCES bike(id) ON DELETE CASCADE
+            FOREIGN KEY(bike_id) REFERENCES bike(id) ON DELETE CASCADE,
+            UNIQUE(buy_id, bike_id)
         )",
         [],
     )?;
@@ -144,7 +147,8 @@ fn create_buy_to_category_table(conn: &Connection) -> Result<()> {
             buy_id          INTEGER NOT NULL,
             category_id     INTEGER NOT NULL,
             FOREIGN KEY(buy_id) REFERENCES buy(id) ON DELETE CASCADE,
-            FOREIGN KEY(category_id) REFERENCES category(id) ON DELETE CASCADE
+            FOREIGN KEY(category_id) REFERENCES category(id) ON DELETE CASCADE,
+            UNIQUE(buy_id, category_id)
         )",
         [],
     )?;
