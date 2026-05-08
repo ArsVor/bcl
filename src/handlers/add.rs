@@ -1,15 +1,14 @@
-use std::collections::HashMap;
-
 use chrono::NaiveDate;
 use owo_colors::OwoColorize;
 use rusqlite::{Connection, Result, params};
 
 use crate::cli::structs::Command;
 use crate::db::models::{Bike, Category};
-use crate::db::queries::{get_bike, get_category, get_lub_info, tag_get_or_create_tx};
+use crate::db::queries::{get_lub_info, tag_get_or_create_tx};
 use crate::err_exit;
 use crate::handlers::helpers;
 use crate::handlers::helpers::get::{get_bike_or_exit, get_category_or_exit};
+use crate::handlers::structs::FkIds;
 
 pub fn route(mut conn: Connection, command: Command) -> Result<()> {
     let obj = if let Some(obj) = command.object.get() {
@@ -133,25 +132,25 @@ fn buy(conn: &mut Connection, command: Command) -> Result<()> {
     let price: f32 = command.val.unwrap();
     let date: NaiveDate = command.date.to_naive();
 
+    // 1. Категорія і байк
+    let mut fk_id: FkIds = FkIds::new();
+    if let Some(cat_name) = &command.category.get() {
+        let cat: Category = get_category_or_exit(conn, cat_name.as_str())?;
+        fk_id.category = Some(cat.id);
+
+        if let Some(bike_id_val) = command.bike_id.get() {
+            let bike: Bike = get_bike_or_exit(conn, cat_name.as_str(), bike_id_val)?;
+            fk_id.bike = Some(bike.id);
+        }
+    }
+
     let tx = conn.transaction()?; // все піде сюди
 
-    // 1. Теги в тій же транзакції
+    // 2. Теги в тій же транзакції
     let mut tags_id: Vec<i32> = Vec::new();
     if !command.include_tags.is_empty() {
         for tag in &command.include_tags {
             tags_id.push(tag_get_or_create_tx(&tx, tag.as_str())?);
-        }
-    }
-
-    // 2. Категорія і байк
-    let mut fk_id: HashMap<&str, i32> = HashMap::new();
-    if let Some(cat_name) = &command.category.get() {
-        let cat: Category = get_category_or_exit(&tx, cat_name.as_str())?;
-        fk_id.insert("cat_id", cat.id);
-
-        if let Some(bike_id_val) = command.bike_id.get() {
-            let bike: Bike = get_bike_or_exit(&tx, cat_name.as_str(), bike_id_val)?;
-            fk_id.insert("bike_id", bike.id);
         }
     }
 
@@ -163,14 +162,14 @@ fn buy(conn: &mut Connection, command: Command) -> Result<()> {
     let buy_id = tx.last_insert_rowid();
 
     // 4. Прив’язки
-    if let Some(&category_id) = fk_id.get("cat_id") {
+    if let Some(category_id) = fk_id.category {
         tx.execute(
             "INSERT INTO buy_to_category (buy_id, category_id) VALUES (?1, ?2)",
             params![buy_id, category_id],
         )?;
     }
 
-    if let Some(&bike_id) = fk_id.get("bike_id") {
+    if let Some(bike_id) = fk_id.bike {
         tx.execute(
             "INSERT INTO buy_to_bike (buy_id, bike_id) VALUES (?1, ?2)",
             params![buy_id, bike_id],

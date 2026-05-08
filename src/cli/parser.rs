@@ -188,7 +188,7 @@ pub fn update_data_parse(data_str: String) -> Option<Box<Command>> {
         .map(|p| p.to_string())
         .collect();
 
-    // println!("{:?}", &args);
+    
     if args.is_empty() {
         return None;
     } else {

@@ -1,11 +1,9 @@
-use owo_colors::OwoColorize;
 use rusqlite::{Connection, Result, params};
 
 use crate::cli::structs::Command;
 use crate::db::models::{
     BikeInfo, BikeList, BuyInfo, Category, CategoryInfo, ChainLubricationList, RideInfo,
 };
-use crate::db::queries;
 use crate::handlers::helpers::{BuyResult, RideResult};
 use crate::handlers::structs::{BuysInfoReport, RidesInfoReport};
 use crate::output;
@@ -153,7 +151,7 @@ fn ride(conn: &Connection, command: Command) -> Result<()> {
         unreachable!()
     };
 
-    // println!("Rides: {:?}", &rides);
+    
     match rides.len() {
         0 => {
             suc_exit!("Rides for your request was not found.");
@@ -161,7 +159,7 @@ fn ride(conn: &Connection, command: Command) -> Result<()> {
         1 => output::info::ride_info_single(&rides[0]),
         _ => {
             let report: RidesInfoReport = RidesInfoReport::from(rides, &command);
-            // println!("{:?}", &report);
+    
             if command.output.is_none() {
                 output::info::ride_info(report);
             } else {

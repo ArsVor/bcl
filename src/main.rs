@@ -13,12 +13,9 @@ use rusqlite::Connection;
 fn main() {
     let mut args: Vec<String> = args().collect();
     args.remove(0);
-    // println!("ARGS: {:?}", &args);
     if !args.is_empty() {
         let conn: Connection = open_connection_with_fk("./bcl.db").unwrap();
         let command: Command = Command::from(args);
-        // println!("COMMAND: {:#?}", &command);
-        // suc_exit!("Done");
 
         let funk = command.funk.unwrap();
         let result = match funk.as_str() {
@@ -32,17 +29,8 @@ fn main() {
         };
 
         if let Err(e) = result {
-            println!("OoPS!");
             err_exit!(&e);
         }
-        // println!("{:?}", db::queries::get_category(&conn, "G"))
-        // println!("Is year? - {:?}", &command.date.year.is_some());
-        // println!("Year is - {:?}", &command.date.year_or_now());
-        // println!("Now year is - {:?}", &command.date.year);
-        // println!("Is date a valid? - {:?}", &command.date.is_valid_date());
-        // println!("{:?}", &command.funk.is_some());
-        // println!("{:?}", &command.val.unwrap_or(0.0));
-        // println!("done")
     } else {
         err_exit!("Nothing to do (from main.rs)");
         // потім реалізую логіку виводу help

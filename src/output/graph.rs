@@ -9,13 +9,12 @@ struct GraphData {
     total_val: f32,
     units: String,
     count_title: String,
-    val_title: String,    
-    uncategorized: Option<f32>
+    val_title: String,
+    uncategorized: Option<f32>,
 }
 
 pub fn ride_graph(report: RidesInfoReport) {
     let title_text: String = format!("{:>9} {} ~~", "~~ Rides", &report.iter_type);
-    // println!("REPORT: {:?}", &report);
     let val_title_text: String = format!("{:15}", "total distance:");
     let count_title_text: String = format!("{:15}", "ride count:");
 
@@ -26,16 +25,15 @@ pub fn ride_graph(report: RidesInfoReport) {
         total_val: report.total_distance,
         units: String::from("km"),
         count_title: count_title_text,
-        val_title: val_title_text,    
-        uncategorized: None
+        val_title: val_title_text,
+        uncategorized: None,
     };
-    
+
     graph_h(graph_data);
 }
 
 pub fn buy_graph(report: BuysInfoReport) {
     let title_text: String = format!("{:>9} {} ~~", "~~ Buys", &report.iter_type);
-    println!("REPORT: {:?}", &report);
     let val_title_text: String = format!("{:15}", "total spend:");
     let count_title_text: String = format!("{:15}", "buys count:");
     let uncat: Option<f32> = if report.spend_uncategorized > 0.0 {
@@ -51,16 +49,20 @@ pub fn buy_graph(report: BuysInfoReport) {
         total_val: report.total_spend,
         units: String::from("UAH"),
         count_title: count_title_text,
-        val_title: val_title_text,    
-        uncategorized: uncat
+        val_title: val_title_text,
+        uncategorized: uncat,
     };
-    
+
     graph_h(graph_data);
 }
 
 fn graph_h(data: GraphData) {
-    // println!("DATA: {:?}", &data);
-    let mut max_val = data.data.iter().map(|(_, v)| *v).reduce(f32::max).unwrap_or(0.);
+    let mut max_val = data
+        .data
+        .iter()
+        .map(|(_, v)| *v)
+        .reduce(f32::max)
+        .unwrap_or(0.);
 
     if let Some(uncat) = data.uncategorized {
         max_val = max_val.max(uncat);
@@ -80,25 +82,24 @@ fn graph_h(data: GraphData) {
             bar_len += 1;
             bar += "▖";
         }
-        format!(
-            "{:>8}│{}{} {}",
-            &key,
-            bar,
-            " ".repeat(52 - (bar_len)),
-            val
-        )
+        format!("{:>8}│{}{} {}", &key, bar, " ".repeat(52 - (bar_len)), val)
     }
 
     for (key, val) in data.data {
         println!("{}", get_formatted_line(key, val, len_point));
     }
 
-
     if let Some(val) = data.uncategorized {
-        println!("{}", get_formatted_line(String::from("Uncat:"), val, len_point));
+        println!(
+            "{}",
+            get_formatted_line(String::from("Uncat:"), val, len_point)
+        );
     }
 
     println!("{:>9}{}({})", "└", "─".repeat(60), &data.units);
     println!("{:>9}{} {}", "", &data.count_title, &data.count);
-    println!("{:>9}{} {}{}", "", &data.val_title, &data.total_val, &data.units);
+    println!(
+        "{:>9}{} {}{}",
+        "", &data.val_title, &data.total_val, &data.units
+    );
 }

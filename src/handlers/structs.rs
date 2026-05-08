@@ -7,6 +7,12 @@ use crate::{
     db::models::{BuyInfo, RideInfo},
 };
 
+#[derive(Debug, Default, Clone)]
+pub struct FkIds {
+    pub category: Option<i32>,
+    pub bike: Option<i32>,
+}
+
 #[derive(Debug, Clone)]
 pub struct BuysInfoReport {
     pub buys_count: u32,
@@ -34,6 +40,19 @@ pub struct RidesInfoReport {
     pub last_date: Option<NaiveDate>,
     pub total_distance: f32,
     pub distance_by_categories: IndexMap<String, f32>,
+}
+
+impl FkIds {
+    pub fn new() -> Self {
+        Self {
+            category: None,
+            bike: None,
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.category.is_none() && self.bike.is_none()
+    }
 }
 
 impl BuysInfoReport {
@@ -112,47 +131,42 @@ impl BuysInfoReport {
             report.total_spend += buy.price;
 
             if !report.iter_type.is_empty() {
-                // println!("ITER_TYPE: {}", &report.iter_type);
-                if !report.iter_type.is_empty() {
-                    let cat: String = match report.iter_type.as_str() {
-                        "bike" => buy.bike_name,
-                        "cat" => buy.category_name,
-                        "for categories" => {
-                            // println!("BUY_CODE: {} ~~", &buy.code);
-                            if !buy.code.is_empty() {
-                                let code: Vec<&str> = buy.code.split(":").collect();
-                                format!("{}:", code[0])
-                            } else {
-                                String::new()
-                            }
+                let cat: String = match report.iter_type.as_str() {
+                    "bike" => buy.bike_name,
+                    "cat" => buy.category_name,
+                    "for categories" => {
+                        if !buy.code.is_empty() {
+                            let code: Vec<&str> = buy.code.split(":").collect();
+                            format!("{}:", code[0])
+                        } else {
+                            String::new()
                         }
-                        "for bikes" => {
-                            if buy.code.ends_with(":") {
-                                String::new()
-                            } else {
-                                buy.code
-                            }
-                        }
-                        "dayly" => buy.date.format("%y-%m-%d").to_string(),
-                        "weekly" => buy.date.iso_week().week().to_string(),
-                        "monthly" => buy.date.format("%y-%m").to_string(),
-                        "yearly" => buy.date.year().to_string(),
-                        _ => {
-                            unreachable!()
-                        }
-                    };
-
-                    if cat.is_empty() {
-                        report.spend_uncategorized += buy.price;
-                    } else if let Some(val) = report.spend_by_categories.get_mut(&cat) {
-                        *val += buy.price;
-                    } else {
-                        report.spend_by_categories.insert(cat, buy.price);
                     }
+                    "for bikes" => {
+                        if buy.code.ends_with(":") {
+                            String::new()
+                        } else {
+                            buy.code
+                        }
+                    }
+                    "dayly" => buy.date.format("%y-%m-%d").to_string(),
+                    "weekly" => buy.date.iso_week().week().to_string(),
+                    "monthly" => buy.date.format("%y-%m").to_string(),
+                    "yearly" => buy.date.year().to_string(),
+                    _ => {
+                        unreachable!()
+                    }
+                };
+
+                if cat.is_empty() {
+                    report.spend_uncategorized += buy.price;
+                } else if let Some(val) = report.spend_by_categories.get_mut(&cat) {
+                    *val += buy.price;
+                } else {
+                    report.spend_by_categories.insert(cat, buy.price);
                 }
             }
         }
-        println!("REPORT: {:?}", &report);
 
         report
     }
@@ -253,7 +267,6 @@ impl RidesInfoReport {
                 }
             }
         }
-        println!("REPORT: {:?}", &report);
 
         report
     }

@@ -246,7 +246,7 @@ fn tag(conn: &Connection, command: Command) -> Result<()> {
     if tags_to_delete.is_empty() {
         suc_exit!("Nothing to do!");
     }
-    println!("TAGS TO DELEE: {:?}", &tags_to_delete);
+    
 
     let del_all: bool;
 

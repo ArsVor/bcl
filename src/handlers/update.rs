@@ -2,16 +2,16 @@ use std::collections::HashSet;
 
 use chrono::NaiveDate;
 use owo_colors::OwoColorize;
-use owo_colors::colors::xterm::{ElectricIndigo, VerdunGreen};
 use rusqlite::{Connection, Result, ToSql, params, params_from_iter};
 
 use crate::cli::structs::Command;
-use crate::db::models::{Bike, Buy, Category, ChainLubrication, Ride};
-use crate::db::queries::{delete_unused_tags, get_bike, get_category, tag_get_or_create_tx};
-use crate::handlers::helpers::get::{get_bike_or_exit, get_category_or_exit};
+use crate::db::queries::{delete_unused_tags, tag_get_or_create_tx};
+use crate::handlers::helpers::{
+    self,
+    get::{get_bike_or_exit, get_category_or_exit},
+};
+use crate::handlers::structs::FkIds;
 use crate::{err_exit, suc_exit, warn};
-
-use super::helpers;
 
 pub fn route(mut conn: Connection, mut command: Command) -> Result<()> {
     let obj = if let Some(obj) = command.object.get() {
@@ -36,7 +36,7 @@ pub fn route(mut conn: Connection, mut command: Command) -> Result<()> {
 
     match obj.as_str() {
         "bike" => bike(&conn, command),
-        // "buy" => buy(&mut conn, command),
+        "buy" => buy(&mut conn, command),
         "cat" => cat(&conn, command),
         "lub" => lub(&conn, command),
         "ride" => ride(&mut conn, command),
@@ -114,164 +114,203 @@ fn bike(conn: &Connection, command: Command) -> Result<()> {
     Ok(())
 }
 
-// fn buy(conn: &mut Connection, command: Command) -> Result<()> {
-//     if command.val.is_none()
-//         && command.date.is_none()
-//         && command.category.is_none()
-//         && command.bike_id.is_none()
-//         && command.include_tags.is_empty()
-//         && command.exclude_tags.is_empty()
-//         && command.annotation.is_empty()
-//     {
-//         suc_exit!("Nothing to do!");
-//     }
-//
-//     let mut cat: Option<Category> = None;
-//     let mut bike: Option<Bike> = None;
-//     let mut target: String = String::new();
-//
-//     let mut buy: Buy = conn.query_row(
-//         "SELECT
-//             b.id AS buy_id,
-//             b.name AS name,
-//             b.price As price,
-//             b.datestamp AS datestamp,
-//             COALESCE(GROUP_CONCAT(t.name, ', '), '') AS tags
-//         FROM buy b
-//         LEFT JOIN tag_to_buy tb ON tb.buy_id = b.id
-//         LEFT JOIN tag t ON t.id = tb.tag_id
-//         WHERE b.id = ?1
-//         GROUP BY b.id",
-//         params![id],
-//         Buy::from_row,
-//     )?;
-//
-//     if !command.annotation.is_empty() {
-//         buy.name = command.annotation.join(" ");
-//     }
-//
-//     if let Some(val) = command.val.get() {
-//         buy.price = val
-//     }
-//
-//     if command.date.is_some() {
-//         buy.datestamp = command.date.to_naive()
-//     }
-//
-//     if let Some(category) = command.category.get() {
-//         let abbr: &str = category.as_str();
-//         target.push_str(abbr);
-//         target.push(':');
-//         cat = Some(get_category_or_exit(conn, abbr)?);
-//
-//         if let Some(bike_id) = command.bike_id.get() {
-//             target.push_str(&bike_id.to_string());
-//             bike = Some(get_bike_or_exit(conn, abbr, bike_id)?);
-//         }
-//     }
-//
-//     let tx = conn.transaction()?;
-//
-//     tx.execute(
-//         "UPDATE buy
-//         SET
-//             name = ?1,
-//             price = ?2,
-//             datestamp = ?3
-//         WHERE id = ?4",
-//         params![buy.name, buy.price, buy.datestamp, buy.id],
-//     )?;
-//
-//     if let Some(bike_obj) = bike {
-//         if let Ok(btb_id) = tx.query_row(
-//             "SELECT id FROM buy_to_bike WHERE buy_id = ?1",
-//             params![buy.id],
-//             |row| row.get::<_, i32>(0),
-//         ) {
-//             tx.execute(
-//                 "UPDATE buy_to_bike
-//                 SET bike_id = ?1
-//                 WHERE id = ?2",
-//                 params![bike_obj.id, btb_id],
-//             )?;
-//         } else {
-//             tx.execute(
-//                 "INSERT INTO buy_to_bike (buy_id, bike_id) VALUES (?1, ?2)",
-//                 params![buy.id, bike_obj.id],
-//             )?;
-//         }
-//     }
-//
-//     if let Some(category) = cat {
-//         if let Ok(btc_id) = tx.query_row(
-//             "SELECT id FROM buy_to_category WHERE buy_id = ?1",
-//             params![buy.id],
-//             |row| row.get::<_, i32>(0),
-//         ) {
-//             tx.execute(
-//                 "UPDATE buy_to_category
-//                 SET category_id = ?1
-//                 WHERE id = ?2",
-//                 params![category.id, btc_id],
-//             )?;
-//         } else {
-//             tx.execute(
-//                 "INSERT INTO buy_to_category (buy_id, category_id) VALUES (?1, ?2)",
-//                 params![buy.id, category.id],
-//             )?;
-//         }
-//     }
-//
-//     if !command.include_tags.is_empty() {
-//         let tags: Vec<&str> = buy.tags.split(", ").collect();
-//         for tag_name in command.include_tags {
-//             if !tags.contains(&tag_name.as_str()) {
-//                 let tag_id = tag_get_or_create_tx(&tx, tag_name.as_str())?;
-//                 tx.execute(
-//                     "INSERT INTO tag_to_buy (tag_id, buy_id) VALUES (?1, ?2)",
-//                     params![tag_id, buy.id],
-//                 )?;
-//             }
-//         }
-//     }
-//
-//     if !command.exclude_tags.is_empty() {
-//         let mut tag_id_query: Vec<String> = vec![];
-//         for tag_name in &command.exclude_tags {
-//             tag_id_query.push(format!(
-//                 "tag_id = (SELECT t.id FROM tag WHERE t.name = '{}')",
-//                 &tag_name
-//             ));
-//         }
-//
-//         tx.execute(
-//             "DELETE FROM tag_to_buy WHERE buy_id = ?1 AND ?2",
-//             params![buy.id, format!("({})", tag_id_query.join(" OR "))],
-//         )?;
-//     }
-//
-//     tx.commit()?;
-//
-//     let deleted_tags: Vec<String> = delete_unused_tags(conn)?;
-//
-//     println!(
-//         "{}",
-//         format!(
-//             "Buy id:{0} modified to {1} \"{3}\" {4} {5} tags:({2})",
-//             buy.id, &target, buy.tags, buy.name, buy.price, buy.datestamp,
-//         )
-//         .blue()
-//     );
-//
-//     if !deleted_tags.is_empty() {
-//         println!(
-//             "{}",
-//             format!("Deleted tags: {}", deleted_tags.join(", "),).blue()
-//         );
-//     }
-//
-//     Ok(())
-// }
+fn buy(conn: &mut Connection, command: Command) -> Result<()> {
+    let mut set_sql: Vec<String> = Vec::new();
+    let mut dyn_params: Vec<Box<dyn ToSql>> = Vec::new();
+    let update_data: Box<Command> = command.update_data.unwrap();
+    let mut fk_id: FkIds = FkIds::new();
+    let mut updated_code = String::new();
+
+    if let Some(abbr) = update_data.category.as_ref() {
+        fk_id.category = Some(get_category_or_exit(conn, abbr)?.id);
+        updated_code = format!("{abbr}: ");
+
+        if let Some(id_in_cat) = update_data.bike_id.as_ref() {
+            fk_id.bike = Some(get_bike_or_exit(conn, abbr, *id_in_cat)?.id);
+            updated_code = format!("{abbr}:{id_in_cat} ");
+        }
+    }
+
+    let updated_annotation = if !update_data.annotation.is_empty() {
+        let annotation = update_data.annotation.join(" ");
+        let formatted = format!("\"{}\" ", &annotation);
+
+        set_sql.push("name = ?".into());
+        dyn_params.push(Box::new(annotation));
+
+        formatted
+    } else {
+        String::new()
+    };
+
+    let updated_date = if update_data.date.is_some() {
+        let date: NaiveDate = update_data.date.to_naive();
+        let formatted = format!("{} ", &date);
+        set_sql.push("datestamp = ?".into());
+        dyn_params.push(Box::new(date));
+        formatted
+    } else {
+        String::new()
+    };
+
+    let updated_val = if let Some(val) = update_data.val.get() {
+        let formatted = format!("{}UAH ", &val);
+        set_sql.push("price = ?".into());
+        dyn_params.push(Box::new(val));
+        formatted
+    } else {
+        String::new()
+    };
+
+    if set_sql.is_empty()
+        && fk_id.is_empty()
+        && update_data.include_tags.is_empty()
+        && update_data.exclude_tags.is_empty()
+    {
+        suc_exit!("No data to change. Nothing to do!");
+    }
+
+    let tx = conn.transaction()?;
+
+    if !set_sql.is_empty() {
+        let placeholders = std::iter::repeat_n("?", command.cleaned_id.len())
+            .collect::<Vec<_>>()
+            .join(",");
+
+        for id in &command.cleaned_id {
+            dyn_params.push(Box::new(*id));
+        }
+
+        let sql: String = format!(
+            "UPDATE buy SET {} WHERE id IN ({})",
+            set_sql.join(", "),
+            placeholders
+        );
+
+        tx.execute(
+            &sql,
+            params_from_iter(dyn_params.iter().map(|b| b.as_ref())),
+        )?;
+    }
+
+    if let Some(category_id) = fk_id.category {
+        for id in &command.cleaned_id {
+            let rows_affected = tx.execute(
+                "UPDATE buy_to_category SET category_id = ? WHERE buy_id = ?",
+                params![category_id, id],
+            )?;
+
+            if rows_affected == 0 {
+                tx.execute(
+                    "INSERT INTO buy_to_category (buy_id, category_id) VALUES (?, ?)",
+                    params![id, category_id],
+                )?;
+            }
+
+            if let Some(bike_id) = &fk_id.bike {
+                let rows_affected = tx.execute(
+                    "UPDATE buy_to_bike SET bike_id = ? WHERE buy_id = ?",
+                    params![bike_id, id],
+                )?;
+
+                if rows_affected == 0 {
+                    tx.execute(
+                        "INSERT INTO buy_to_bike (buy_id, bike_id) VALUES (?, ?)",
+                        params![id, bike_id],
+                    )?;
+                }
+            } else {
+                tx.execute("DELETE FROM buy_to_bike WHERE buy_id = ?", params![id])?;
+            }
+        }
+    }
+
+    if !update_data.include_tags.is_empty() {
+        let mut tag_id_set: Vec<i32> = Vec::new();
+
+        for tag_name in &update_data.include_tags {
+            tag_id_set.push(tag_get_or_create_tx(&tx, tag_name)?);
+        }
+
+        let mut stmt = tx.prepare(
+            "INSERT OR IGNORE INTO tag_to_buy (tag_id, buy_id)
+             VALUES (?, ?)",
+        )?;
+
+        for buy_id in &command.cleaned_id {
+            for tag_id in &tag_id_set {
+                stmt.execute(params![tag_id, buy_id])?;
+            }
+        }
+    }
+
+    if !update_data.exclude_tags.is_empty() {
+        let mut sct_stmt = tx.prepare("SELECT id FROM tag WHERE name = ?")?;
+
+        let tag_ids: HashSet<i32> = update_data
+            .exclude_tags
+            .iter()
+            .filter_map(|name| sct_stmt.query_row([name], |row| row.get(0)).ok())
+            .collect();
+
+        let mut del_stmt = tx.prepare("DELETE FROM tag_to_buy WHERE tag_id = ? AND buy_id = ?")?;
+
+        for buy_id in &command.cleaned_id {
+            for tag in &tag_ids {
+                del_stmt.execute(params![tag, buy_id])?;
+            }
+        }
+    }
+
+    tx.commit()?;
+
+    let deleted_tags: Vec<String> = delete_unused_tags(conn)?;
+
+    let included_tags = update_data
+        .include_tags
+        .into_iter()
+        .map(|t| format!("+{t} "))
+        .collect::<Vec<_>>()
+        .join(",");
+
+    let excluded_tags = update_data
+        .exclude_tags
+        .into_iter()
+        .map(|t| format!("-{t} "))
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    let cleaned_id_str: String = command
+        .cleaned_id
+        .iter()
+        .map(|i| i.to_string())
+        .collect::<Vec<String>>()
+        .join(",");
+
+    println!(
+        "{}",
+        format!(
+            "Buy id:({0}) modified to: {1}{2}{3}{4}{5}{6}",
+            &cleaned_id_str,
+            &updated_code,
+            &updated_annotation,
+            &updated_date,
+            &updated_val,
+            &included_tags,
+            &excluded_tags,
+        )
+        .blue()
+    );
+
+    if !deleted_tags.is_empty() {
+        println!(
+            "{}",
+            format!("Deleted tags: {}", deleted_tags.join(", "),).blue()
+        );
+    }
+
+    Ok(())
+}
 
 fn cat(conn: &Connection, command: Command) -> Result<()> {
     if command.cleaned_id.len() > 1 {
@@ -337,7 +376,7 @@ fn lub(conn: &Connection, command: Command) -> Result<()> {
     let mut updated_val: String = String::new();
     let mut updated_annotation: String = String::new();
     let update_data = command.update_data.unwrap();
-    // println!("UPD DATA {:#?}", &update_data);
+    
 
     if !update_data.annotation.is_empty() {
         let annotation: String = update_data.annotation.join(" ");
@@ -426,7 +465,7 @@ fn ride(conn: &mut Connection, command: Command) -> Result<()> {
 
     let updated_code = match (update_data.category.get(), update_data.bike_id.get()) {
         (Some(abbr), Some(id_in_cat)) => {
-            let bike_id = helpers::get::get_bike_or_exit(conn, &abbr, id_in_cat)?.id;
+            let bike_id = get_bike_or_exit(conn, &abbr, id_in_cat)?.id;
             let formatted: String = format!("{}:{} ", &abbr, &id_in_cat);
 
             set_sql.push("bike_id = ?".into());

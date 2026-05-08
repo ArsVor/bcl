@@ -2,11 +2,8 @@ use owo_colors::OwoColorize;
 use std::cmp;
 
 use crate::{
-    db::models::{BikeInfo, Buy, BuyInfo, CategoryInfo, ChainLubricationList, RideInfo},
-    handlers::{
-        helpers::get::bike,
-        structs::{BuysInfoReport, RidesInfoReport},
-    },
+    db::models::{BikeInfo, BuyInfo, CategoryInfo, ChainLubricationList, RideInfo},
+    handlers::structs::{BuysInfoReport, RidesInfoReport},
 };
 
 pub fn bike_info(bike: BikeInfo) {
