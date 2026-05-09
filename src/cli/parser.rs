@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use lazy_regex::regex_is_match;
 use rusqlite::{Connection, Result};
 
@@ -6,7 +8,8 @@ use crate::db::helpers::open_connection_with_fk;
 use crate::err_exit;
 
 pub fn get_bicycle_types() -> Result<Vec<String>> {
-    let conn: Connection = open_connection_with_fk("./bcl.db").unwrap();
+    let db: PathBuf = PathBuf::from("./bcl.db");
+    let conn: Connection = open_connection_with_fk(&db).unwrap();
 
     let mut stmt = conn.prepare("SELECT abbr FROM category")?;
     let bicycle_types: Vec<String> = stmt
@@ -188,7 +191,6 @@ pub fn update_data_parse(data_str: String) -> Option<Box<Command>> {
         .map(|p| p.to_string())
         .collect();
 
-    
     if args.is_empty() {
         return None;
     } else {
