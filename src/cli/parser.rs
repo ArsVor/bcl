@@ -1,15 +1,28 @@
 use std::path::PathBuf;
 
+use anyhow::Result;
 use lazy_regex::regex_is_match;
-use rusqlite::{Connection, Result};
+use rusqlite::Connection;
 
 use super::structs::Command;
 use crate::db::helpers::open_connection_with_fk;
 use crate::err_exit;
+use crate::init::{get_config, init_paths};
 
 pub fn get_bicycle_types() -> Result<Vec<String>> {
-    let db: PathBuf = PathBuf::from("./bcl.db");
-    let conn: Connection = open_connection_with_fk(&db).unwrap();
+    // REG DEV mod
+    // let db: PathBuf = PathBuf::from("./bcl.db");
+    // let conn: Connection = open_connection_with_fk(&db)?;
+    // REGEND DEV mod
+
+    // REG RELEASE mod
+    let paths = init_paths()?;
+
+    let config_file: PathBuf = paths.config_dir.join("config.toml");
+    let config = get_config(&config_file)?;
+
+    let conn: Connection = open_connection_with_fk(&config.database.path)?;
+    // REGEND RELEASE mod
 
     let mut stmt = conn.prepare("SELECT abbr FROM category")?;
     let bicycle_types: Vec<String> = stmt
