@@ -124,8 +124,8 @@ impl BuysInfoReport {
             report.target = Some(buys[0].bike_name.clone());
         }
 
-        report.last_price = buys[0].price;
-        report.last_date = Some(buys[0].date);
+        report.last_price = buys.last().unwrap().price;
+        report.last_date = Some(buys.last().unwrap().date);
 
         for buy in buys {
             report.total_spend += buy.price;
@@ -236,8 +236,8 @@ impl RidesInfoReport {
             report.target = Some(rides[0].bike.clone());
         }
 
-        report.last_distance = rides[0].distance;
-        report.last_date = Some(rides[0].date);
+        report.last_distance = rides.last().unwrap().distance;
+        report.last_date = Some(rides.last().unwrap().date);
 
         for ride in rides {
             report.total_distance += ride.distance;

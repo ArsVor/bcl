@@ -21,7 +21,7 @@ pub struct Database {
 }
 
 pub fn create_default_config_file(config_file: &Path, data_dir: &Path) -> Result<()> {
-    let db = data_dir.join("tsm.db");
+    let db = data_dir.join("bcl.db");
 
     let content = format!("[database]\npath = \"{}\"", db.display());
 
