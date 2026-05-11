@@ -37,13 +37,22 @@ pub fn get_config(config_file: &Path) -> Result<Config> {
     Ok(config)
 }
 
-pub fn init_paths() -> Result<AppPaths> {
+pub fn init_paths(runmod: &str) -> Result<AppPaths> {
     let proj =
         ProjectDirs::from("com", "Ars Inc", "bcl").expect("Cannot determine project directories");
 
-    let config_dir = proj.config_dir().to_path_buf();
-    let data_dir = proj.data_dir().to_path_buf();
-    let cache_dir = proj.cache_dir().to_path_buf();
+    let (config_dir, data_dir, cache_dir): (PathBuf, PathBuf, PathBuf) = match runmod {
+        "release" => (
+            proj.config_dir().to_path_buf(),
+            proj.data_dir().to_path_buf(),
+            proj.cache_dir().to_path_buf(),
+        ),
+        _ => (
+            PathBuf::from("/home/ars/projects/bcl"),
+            PathBuf::from("/home/ars/projects/bcl"),
+            PathBuf::from("/home/ars/projects/bcl"),
+        ),
+    };
 
     fs::create_dir_all(&config_dir)?;
     fs::create_dir_all(&data_dir)?;

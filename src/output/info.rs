@@ -7,47 +7,61 @@ use crate::{
 };
 
 pub fn bike_info(bike: BikeInfo) {
+    let width = 17;
     let after_lub_distance: f32 = bike.after_lub_distance;
     let msg: String = format!(
-        "Without chain lubrication, passed: {} km",
+        "Without chain lubrication, passed: {:.2} (km)",
         &after_lub_distance
     );
 
     println!("{}", format!("\n~~ {} ~~", &bike.name).green());
     println!(
         "{}",
-        format!("Category:         {}", &bike.category).green()
+        format!("{:width$} {}", "Category:", &bike.category).green()
     );
-    println!("{}", format!("ID:               {}", &bike.id).green());
-    println!("{}", format!("Bike code:        {}", &bike.code).green());
+    println!("{}", format!("{:width$} {}", "ID:", &bike.id).green());
     println!(
         "{}",
-        format!("Added:            {}", &bike.add_date).green()
-    );
-    println!(
-        "{}",
-        format!("Total spend:      {} UAH", &bike.total_spend).green()
+        format!("{:width$} {}", "Bike code:", &bike.code).green()
     );
     println!(
         "{}",
-        format!("Ride count:       {}", &bike.ride_count).green()
+        format!("{:width$} {}", "Added:", &bike.add_date).green()
+    );
+    println!(
+        "{}",
+        format!("{:width$} {:.2} (UAH)", "Total spend:", &bike.total_spend).green()
+    );
+    println!(
+        "{}",
+        format!("{:width$} {}", "Ride count:", &bike.ride_count).green()
     );
     if let Some(date) = bike.last_ride {
         println!(
             "{}",
-            format!("Total distance:   {} km", &bike.total_distance).green()
+            format!(
+                "{:width$} {:.2} (km)",
+                "Total distance:", &bike.total_distance
+            )
+            .green()
         );
-        println!("{}", format!("Last ride:        {}", &date).green());
+        println!("{}", format!("{:width$} {}", "Last ride:", &date).green());
         println!(
             "{}",
-            format!("    distance:     {} km", &bike.last_distance).green()
+            format!("{:width$} {:.2} (km)", " distance:", &bike.last_distance).green()
         );
     }
     if let Some(date) = bike.maintenance {
-        println!("{}", format!("Last maintenance: {}", &date).green());
+        println!(
+            "{}",
+            format!("{:width$} {}", "Last maintenance:", &date).green()
+        );
     }
     if let Some(date) = bike.chain_lub {
-        println!("{}", format!("Last chain lub:   {}", &date).green());
+        println!(
+            "{}",
+            format!("{:width$} {}", "Last chain lub:", &date).green()
+        );
     }
     if after_lub_distance > 0.00 {
         if after_lub_distance > 200.00 {
@@ -68,7 +82,7 @@ pub fn buy_info(report: BuysInfoReport) {
             .max_by_key(|k| k.len())
             .unwrap_or(&"".to_string())
             .len()
-            + 4,
+            + 2,
         15,
     );
     println!("{}", "\n~~ Buys ~~".green());
@@ -95,7 +109,7 @@ pub fn buy_info(report: BuysInfoReport) {
     );
     println!(
         "{}",
-        format!("{:width$} {}", "Last bought:", &report.last_price).green()
+        format!("{:width$} {:.2} (UAH)", "Last bought:", &report.last_price).green()
     );
     println!(
         "{}",
@@ -103,7 +117,7 @@ pub fn buy_info(report: BuysInfoReport) {
     );
     println!(
         "{}",
-        format!("{:width$} {}", "Total spend:", &report.total_spend).green()
+        format!("{:width$} {:.2} (UAH)", "Total spend:", &report.total_spend).green()
     );
 
     match report.iter_type.as_str() {
@@ -120,17 +134,22 @@ pub fn buy_info(report: BuysInfoReport) {
         for (cat, spend) in report.spend_by_categories.iter() {
             println!(
                 "{}",
-                format!("{:width$} {}", format!("{cat}:"), spend).green()
+                format!("{:width$} {:.2} (UAH)", format!("{cat}:"), spend).green()
             );
         }
         println!(
             "{}",
-            format!("{:width$} {}", "Uncategorized:", report.spend_uncategorized).green()
+            format!(
+                "{:width$} {:.2} (UAH)",
+                "Uncategorized:", report.spend_uncategorized
+            )
+            .green()
         )
     }
 }
 
 pub fn buy_info_single(buy: &BuyInfo) {
+    let width = 6;
     let mut target: &String = &"uncategorized".to_string();
 
     if !buy.bike_name.is_empty() {
@@ -140,43 +159,58 @@ pub fn buy_info_single(buy: &BuyInfo) {
     }
 
     println!("{}", format!("\n~~ {} ~~", &buy.name).green());
-    println!("{}", format!("ID:             {}", &buy.buy_id).green());
-    println!("{}", format!("Date:           {}", &buy.date).green());
-    println!("{}", format!("For:            {}", &target).green());
-    println!("{}", format!("Tags:           {}", &buy.tags).green());
-    println!("{}", format!("Price:          {}", &buy.price).green());
+    println!("{}", format!("{:width$} {}", "ID:", &buy.buy_id).green());
+    println!("{}", format!("{:width$} {}", "Date:", &buy.date).green());
+    println!("{}", format!("{:width$} {}", "For:", &target).green());
+    println!("{}", format!("{:width$} {}", "Tags:", &buy.tags).green());
+    println!(
+        "{}",
+        format!("{:width$} {:.2} (UAH)", "Price:", &buy.price).green()
+    );
 }
 
 pub fn category_info(info: CategoryInfo) {
+    let width = 15;
     println!("{}", format!("\n~~ {} ~~", &info.name).green());
-    println!("{}", format!("ID:             {}", &info.id).green());
-    println!("{}", format!("Code:           {}", &info.abbr).green());
+    println!("{}", format!("{:width$} {}", "ID:", &info.id).green());
+    println!("{}", format!("{:width$} {}", "Code:", &info.abbr).green());
     println!(
         "{}",
-        format!("Bike count:     {}", &info.bike_count).green()
+        format!("{:width$} {}", "Bike count:", &info.bike_count).green()
     );
     println!(
         "{}",
-        format!("Total spend:    {} UAH", &info.total_spend).green()
+        format!("{:width$} {:.2} (UAH)", "Total spend:", &info.total_spend).green()
     );
     println!(
         "{}",
-        format!("Ride count:     {}", &info.ride_count).green()
+        format!("{:width$} {}", "Ride count:", &info.ride_count).green()
     );
     println!(
         "{}",
-        format!("Total distance: {} km", &info.total_distance).green()
+        format!(
+            "{:width$} {:.2} (km)",
+            "Total distance:", &info.total_distance
+        )
+        .green()
     );
 }
 
 pub fn lub_info(lub: ChainLubricationList, bike_name: String) {
+    let width = 11;
     println!("{}", "\n~~ Chain lubrication ~~".green());
-    println!("{}", format!("ID:         {}", &lub.lub_id).green());
-    println!("{}", format!("Bike:       {}", &bike_name).green());
-    println!("{}", format!("Code:       {}", &lub.bike).green());
-    println!("{}", format!("Date:       {}", &lub.date).green());
-    println!("{}", format!("Passed:     {}", &lub.passed).green());
-    println!("{}", format!("Annotation: {}", &lub.annotation).green());
+    println!("{}", format!("{:width$} {}", "ID:", &lub.lub_id).green());
+    println!("{}", format!("{:width$} {}", "Bike:", &bike_name).green());
+    println!("{}", format!("{:width$} {}", "Code:", &lub.bike).green());
+    println!("{}", format!("{:width$} {}", "Date:", &lub.date).green());
+    println!(
+        "{}",
+        format!("{:width$} {:.2} (km)", "Passed:", &lub.passed).green()
+    );
+    println!(
+        "{}",
+        format!("{:width$} {}", "Annotation:", &lub.annotation).green()
+    );
 }
 
 pub fn ride_info(report: RidesInfoReport) {
@@ -189,7 +223,7 @@ pub fn ride_info(report: RidesInfoReport) {
             .max_by_key(|k| k.len())
             .unwrap_or(&"".to_string())
             .len()
-            + 4,
+            + 2,
         15,
     );
 
@@ -217,7 +251,7 @@ pub fn ride_info(report: RidesInfoReport) {
     );
     println!(
         "{}",
-        format!("{:width$} {}", "Last ride:", &report.last_distance).green()
+        format!("{:width$} {:.2} (km)", "Last ride:", &report.last_distance).green()
     );
     println!(
         "{}",
@@ -225,7 +259,11 @@ pub fn ride_info(report: RidesInfoReport) {
     );
     println!(
         "{}",
-        format!("{:width$} {}", "Total distance:", &report.total_distance).green()
+        format!(
+            "{:width$} {:.2} (km)",
+            "Total distance:", &report.total_distance
+        )
+        .green()
     );
 
     if !report.iter_type.is_empty() {
@@ -240,18 +278,28 @@ pub fn ride_info(report: RidesInfoReport) {
         }
 
         for (cat, distance) in report.distance_by_categories.iter() {
-            println!("{}", format!("{:width$} {}", &cat, &distance).green());
+            println!(
+                "{}",
+                format!("{:width$} {:.2} (km)", &cat, &distance).green()
+            );
         }
     }
 }
 
 pub fn ride_info_single(ride: &RideInfo) {
+    let width = 11;
     println!("{}", "\n~~ Ride ~~".green());
-    println!("{}", "Count:      1".green());
-    println!("{}", format!("ID:         {}", &ride.ride_id).green());
-    println!("{}", format!("Bike:       {}", &ride.bike).green());
-    println!("{}", format!("Date:       {}", &ride.date).green());
-    println!("{}", format!("Distance:   {}", &ride.distance).green());
-    println!("{}", format!("Tags:       {}", &ride.tags).green());
-    println!("{}", format!("Annotation: {}", &ride.annotation).green());
+    println!("{}", format!("{:width$} {}", "Count:", 1).green());
+    println!("{}", format!("{:width$} {}", "ID:", &ride.ride_id).green());
+    println!("{}", format!("{:width$} {}", "Bike:", &ride.bike).green());
+    println!("{}", format!("{:width$} {}", "Date:", &ride.date).green());
+    println!(
+        "{}",
+        format!("{:width$} {:.2} (km)", "Distance:", &ride.distance).green()
+    );
+    println!("{}", format!("{:width$} {}", "Tags:", &ride.tags).green());
+    println!(
+        "{}",
+        format!("{:width$} {}", "Annotation:", &ride.annotation).green()
+    );
 }

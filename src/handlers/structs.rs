@@ -73,10 +73,6 @@ impl BuysInfoReport {
     }
 
     pub fn from(buys: Vec<BuyInfo>, command: &Command) -> BuysInfoReport {
-        // if buys.is_empty() {
-        //     error
-        // }
-
         let mut report: BuysInfoReport = BuysInfoReport::new();
 
         report.buys_count = buys.len() as u32;

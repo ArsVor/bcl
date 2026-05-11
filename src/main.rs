@@ -18,12 +18,12 @@ fn main() -> Result<()> {
     args.remove(0);
     if !args.is_empty() {
         // REG DEV mode
-        // let db: PathBuf = PathBuf::from("./bcl.db");
-        // let conn: Connection = open_connection_with_fk(&db)?;
+        let paths = init_paths("dev")?;
         // REGEND DEV mode
 
         // REG RELEASE mod
-        let paths = init_paths()?;
+        // let paths = init_paths("release")?;
+        // REGEND RELEASE mod
 
         let config_file: PathBuf = paths.config_dir.join("config.toml");
         let data_dir: PathBuf = paths.data_dir;
@@ -35,9 +35,7 @@ fn main() -> Result<()> {
         let config = get_config(&config_file)?;
 
         let conn: Connection = open_connection_with_fk(&config.database.path)?;
-        // REGEND RELEASE mod
-
-        let command: Command = Command::from(args);
+        let command: Command = Command::from(&conn, args)?;
 
         let funk = command.funk.unwrap();
         let result = match funk.as_str() {

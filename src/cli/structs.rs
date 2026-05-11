@@ -1,6 +1,8 @@
 use super::parser::{self, multiple_id_pars};
 use crate::err_exit;
+use anyhow::Result;
 use chrono::{Datelike, Local, NaiveDate};
+use rusqlite::Connection;
 use std::{clone::Clone, collections::HashSet};
 
 #[derive(Debug, Clone)]
@@ -351,7 +353,7 @@ impl Command {
         }
     }
 
-    pub fn from(mut args: Vec<String>) -> Command {
+    pub fn from(conn: &Connection, mut args: Vec<String>) -> Result<Command> {
         let mut command: Command = Command::new();
 
         if let Ok(number) = args[0].parse::<u32>() {
@@ -394,11 +396,11 @@ impl Command {
                     if let Some(update_data) = s.strip_prefix("upd:") {
                         command
                             .update_data
-                            .set(parser::update_data_parse(update_data.to_string()));
+                            .set(parser::update_data_parse(conn, update_data.to_string())?);
                     }
                 }
                 s if s.contains(':') => {
-                    command = parser::named_parse(command, arg);
+                    command = parser::named_parse(conn, command, arg)?;
                 }
                 // after s.contains(':') is important!!!
                 s if s.matches('-').count() == 2 => {
@@ -409,7 +411,7 @@ impl Command {
                         .funk
                         .set_or_err(Some("list".to_string()), "multiple command input");
 
-                    let (obj, cat): (String, Option<String>) = parser::get_list_obj(arg);
+                    let (obj, cat): (String, Option<String>) = parser::get_list_obj(conn, arg)?;
                     command
                         .object
                         .set_or_err(Some(obj), "multiple object input.");
@@ -479,6 +481,6 @@ impl Command {
             command.lim = 0;
         }
 
-        command
+        Ok(command)
     }
 }

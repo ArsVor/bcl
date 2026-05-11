@@ -1,29 +1,11 @@
-use std::path::PathBuf;
-
 use anyhow::Result;
 use lazy_regex::regex_is_match;
 use rusqlite::Connection;
 
 use super::structs::Command;
-use crate::db::helpers::open_connection_with_fk;
 use crate::err_exit;
-use crate::init::{get_config, init_paths};
 
-pub fn get_bicycle_types() -> Result<Vec<String>> {
-    // REG DEV mod
-    // let db: PathBuf = PathBuf::from("./bcl.db");
-    // let conn: Connection = open_connection_with_fk(&db)?;
-    // REGEND DEV mod
-
-    // REG RELEASE mod
-    let paths = init_paths()?;
-
-    let config_file: PathBuf = paths.config_dir.join("config.toml");
-    let config = get_config(&config_file)?;
-
-    let conn: Connection = open_connection_with_fk(&config.database.path)?;
-    // REGEND RELEASE mod
-
+pub fn get_bicycle_types(conn: &Connection) -> Result<Vec<String>> {
     let mut stmt = conn.prepare("SELECT abbr FROM category")?;
     let bicycle_types: Vec<String> = stmt
         .query_map([], |row| row.get(0))
@@ -34,28 +16,28 @@ pub fn get_bicycle_types() -> Result<Vec<String>> {
     Ok(bicycle_types)
 }
 
-pub fn get_list_obj(arg: String) -> (String, Option<String>) {
+pub fn get_list_obj(conn: &Connection, arg: String) -> Result<(String, Option<String>)> {
     let val: String = arg[1..].to_string();
 
-    match get_bicycle_types() {
-        Ok(bicycle_types) if bicycle_types.contains(&val) => ("bike".to_string(), Some(val)),
-        Ok(_) => (val, None),
+    match get_bicycle_types(conn) {
+        Ok(bicycle_types) if bicycle_types.contains(&val) => Ok(("bike".to_string(), Some(val))),
+        Ok(_) => Ok((val, None)),
         Err(e) => {
             err_exit!(&e);
         }
     }
 }
 
-pub fn is_bike_type(val: &str) -> bool {
-    match get_bicycle_types() {
-        Ok(bicycle_types) => bicycle_types.contains(&val.to_string()),
+pub fn is_bike_type(conn: &Connection, val: &str) -> Result<bool> {
+    match get_bicycle_types(conn) {
+        Ok(bicycle_types) => Ok(bicycle_types.contains(&val.to_string())),
         Err(e) => {
             err_exit!(&e);
         }
     }
 }
 
-pub fn named_parse(mut command: Command, arg: String) -> Command {
+pub fn named_parse(conn: &Connection, mut command: Command, arg: String) -> Result<Command> {
     let parsed_arg: Vec<&str> = arg.split(":").collect();
 
     if parsed_arg.len() != 2 {
@@ -64,7 +46,7 @@ pub fn named_parse(mut command: Command, arg: String) -> Command {
 
     let (key, val): (&str, &str) = (parsed_arg[0], parsed_arg[1]);
 
-    if is_bike_type(key) {
+    if is_bike_type(conn, key)? {
         if !val.is_empty() {
             if let Ok(number) = val.parse::<u8>() {
                 command
@@ -158,7 +140,7 @@ pub fn named_parse(mut command: Command, arg: String) -> Command {
         }
     }
 
-    command
+    Ok(command)
 }
 
 pub fn multiple_id_pars(val: String) -> Vec<u32> {
@@ -197,7 +179,7 @@ pub fn multiple_id_pars(val: String) -> Vec<u32> {
     id_vec
 }
 
-pub fn update_data_parse(data_str: String) -> Option<Box<Command>> {
+pub fn update_data_parse(conn: &Connection, data_str: String) -> Result<Option<Box<Command>>> {
     let mut args: Vec<String> = data_str
         .split(" ")
         .filter(|p| !p.is_empty())
@@ -205,7 +187,7 @@ pub fn update_data_parse(data_str: String) -> Option<Box<Command>> {
         .collect();
 
     if args.is_empty() {
-        return None;
+        return Ok(None);
     } else {
         args.push("#~~#".to_string());
 
@@ -214,5 +196,5 @@ pub fn update_data_parse(data_str: String) -> Option<Box<Command>> {
         }
     }
 
-    Some(Box::new(Command::from(args)))
+    Ok(Some(Box::new(Command::from(conn, args)?)))
 }

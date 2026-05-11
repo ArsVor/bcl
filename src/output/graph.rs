@@ -82,7 +82,13 @@ fn graph_h(data: GraphData) {
             bar_len += 1;
             bar += "▖";
         }
-        format!("{:>8}│{}{} {}", &key, bar, " ".repeat(52 - (bar_len)), val)
+        format!(
+            "{:>8}│{}{} {:.2}",
+            &key,
+            bar,
+            " ".repeat(52 - (bar_len)),
+            val
+        )
     }
 
     for (key, val) in data.data {
@@ -99,7 +105,7 @@ fn graph_h(data: GraphData) {
     println!("{:>9}{}({})", "└", "─".repeat(60), &data.units);
     println!("{:>9}{} {}", "", &data.count_title, &data.count);
     println!(
-        "{:>9}{} {}{}",
+        "{:>9}{} {:.2}{}",
         "", &data.val_title, &data.total_val, &data.units
     );
 }
