@@ -104,13 +104,9 @@ fn category(conn: &Connection, command: Command) -> Result<()> {
 }
 
 fn lub(conn: &Connection, command: Command) -> Result<()> {
-    let id: Option<u32> = if command.raw_hash_id.len() == 1 {
-        Some(command.raw_hash_id[0])
-    } else {
-        None
-    };
+    let id: Option<u32> = command.get_hash_id_if_single();
     let mut lubs: Vec<ChainLubricationList> = helpers::get::chain_lub(conn, command)?;
-    println!("{}, {:?}", lubs.len(), id);
+
     let lub: ChainLubricationList = match (lubs.len(), id) {
         (0, _) => {
             err_exit!("Chain lubrication for your request was not found.");
