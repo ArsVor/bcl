@@ -46,7 +46,15 @@ pub fn named_parse(conn: &Connection, mut command: Command, arg: String) -> Resu
 
     let (key, val): (&str, &str) = (parsed_arg[0], parsed_arg[1]);
 
-    if is_bike_type(conn, key)? {
+    if key.is_empty() {
+        match val {
+            "lt" | "last" => command.get_last = true,
+            "ft" | "first" => command.get_first = true,
+            _ => {
+                err_exit!(format!("Unexpected key: '{key}'."));
+            }
+        };
+    } else if is_bike_type(conn, key)? {
         if !val.is_empty() {
             if let Ok(number) = val.parse::<u8>() {
                 command

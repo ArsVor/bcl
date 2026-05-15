@@ -36,6 +36,8 @@ fn main() -> Result<()> {
 
         let conn: Connection = open_connection_with_fk(&config.database.path)?;
         let command: Command = Command::from(&conn, args)?;
+        // println!("Command: {:#?}", &command);
+        // suc_exit!("DONE!!!");
 
         let funk = command.funk.unwrap();
         let result = match funk.as_str() {

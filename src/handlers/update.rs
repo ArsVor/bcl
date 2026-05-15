@@ -1,8 +1,9 @@
 use std::collections::HashSet;
 
+use anyhow::Result;
 use chrono::NaiveDate;
 use owo_colors::OwoColorize;
-use rusqlite::{Connection, Result, ToSql, params, params_from_iter};
+use rusqlite::{Connection, ToSql, params, params_from_iter};
 
 use crate::cli::structs::Command;
 use crate::db::queries::{delete_unused_tags, tag_get_or_create_tx};
@@ -376,7 +377,6 @@ fn lub(conn: &Connection, command: Command) -> Result<()> {
     let mut updated_val: String = String::new();
     let mut updated_annotation: String = String::new();
     let update_data = command.update_data.unwrap();
-    
 
     if !update_data.annotation.is_empty() {
         let annotation: String = update_data.annotation.join(" ");

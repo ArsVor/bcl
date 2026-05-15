@@ -1,8 +1,9 @@
+use anyhow::Result;
 use std::collections::HashSet;
 
 use lazy_regex::regex_is_match;
 use owo_colors::OwoColorize;
-use rusqlite::{Connection, Error, ErrorCode, Result, ToSql, params, params_from_iter};
+use rusqlite::{Connection, Error, ErrorCode, ToSql, params, params_from_iter};
 
 use crate::cli::structs::Command;
 use crate::db::models::{BikeList, BuyList, Category, ChainLubricationList, RideList};

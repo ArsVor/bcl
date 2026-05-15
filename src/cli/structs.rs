@@ -41,6 +41,8 @@ pub struct Command {
     pub include_tags: HashSet<String>,
     pub exclude_tags: HashSet<String>,
     pub cleaned: bool,
+    pub get_first: bool,
+    pub get_last: bool,
     pub update_data: Field<Box<Command>>,
 }
 
@@ -349,6 +351,8 @@ impl Command {
             include_tags: HashSet::new(),
             exclude_tags: HashSet::new(),
             cleaned: false,
+            get_first: false,
+            get_last: false,
             update_data: Field::new(),
         }
     }
@@ -482,5 +486,21 @@ impl Command {
         }
 
         Ok(command)
+    }
+
+    pub fn get_hash_id_if_single(&self) -> Option<u32> {
+        if self.raw_hash_id.len() == 1 {
+            Some(self.raw_hash_id.clone()[0])
+        } else {
+            None
+        }
+    }
+
+    pub fn get_self_id_if_single(&self) -> Option<u32> {
+        if self.raw_self_id.len() == 1 {
+            Some(self.raw_self_id.clone()[0])
+        } else {
+            None
+        }
     }
 }

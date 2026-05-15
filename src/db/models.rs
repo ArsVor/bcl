@@ -8,6 +8,8 @@ use tabled::Tabled;
 
 #[derive(Debug, Clone, Tabled)]
 pub struct Category {
+    #[tabled(rename = "#")]
+    pub hash_id: i32,
     #[tabled(rename = "ID")]
     pub id: i32,
     #[tabled(rename = "ABBR")]
@@ -161,7 +163,6 @@ pub struct ChainLubrication {
     pub id: i32,
     pub bike_id: i32,
     pub datestamp: NaiveDate,
-    pub distance: f32,
     pub annotation: String,
 }
 
@@ -212,6 +213,7 @@ pub struct BuyToCategory {
 impl Category {
     pub fn from_row(row: &Row) -> Result<Self> {
         Ok(Self {
+            hash_id: row.get("row_num")?,
             id: row.get("id")?,
             abbr: row.get("abbr")?,
             name: row.get("name")?,
@@ -378,7 +380,6 @@ impl ChainLubrication {
             id: row.get("id")?,
             bike_id: row.get("bike_id")?,
             datestamp: row.get("datestamp")?,
-            distance: row.get("distance")?,
             annotation: row.get("annotation")?,
         })
     }

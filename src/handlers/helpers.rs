@@ -1,5 +1,6 @@
+use anyhow::Result;
 use chrono::NaiveDate;
-use rusqlite::{Connection, Result, ToSql, params_from_iter};
+use rusqlite::{Connection, ToSql, params_from_iter};
 use std::collections::HashSet;
 use std::env;
 use std::fs::read_to_string;
@@ -134,6 +135,7 @@ pub mod get {
     pub fn categories(conn: &Connection) -> Result<Vec<Category>> {
         let mut stmt = conn.prepare(
             "SELECT
+                ROW_NUMBER() OVER (ORDER BY c.id) AS row_num,
                 c.id as id,
                 c.abbr as abbr,
                 c.name as name,
@@ -153,6 +155,7 @@ pub mod get {
 
     pub fn categories_with_id(conn: &Connection, command: Command) -> Result<Vec<Category>> {
         let mut select_sql: String = "SELECT
+                ROW_NUMBER() OVER (ORDER BY c.id) AS row_num,
                 c.id as id,
                 c.abbr as abbr,
                 c.name as name,
@@ -183,6 +186,7 @@ pub mod get {
 
     pub fn category_with_params(conn: &Connection, command: Command) -> Result<Category> {
         let mut select_sql: String = "SELECT
+                ROW_NUMBER() OVER (ORDER BY c.id) AS row_num,
                 c.id as id,
                 c.abbr as abbr,
                 c.name as name,
@@ -192,7 +196,7 @@ pub mod get {
         let mut where_sql: Vec<String> = vec![];
         let mut dyn_params: Vec<Box<dyn ToSql>> = Vec::new();
 
-        if let Some(id) = command.absolute_id.get().or(command.id.get()) {
+        if let Some(id) = command.get_self_id_if_single() {
             where_sql.push(format!("id =?{}", where_sql.len() + 1));
             dyn_params.push(Box::new(id));
         };
@@ -221,8 +225,14 @@ pub mod get {
             )?
             .collect::<Result<Vec<_>, _>>()?;
 
-        if categories.len() > 1 {
-            err_exit!("Not enoughs params. Can't select 1 bike.");
+        if let Some(line_num) = command.get_hash_id_if_single() {
+            if line_num as usize <= categories.len() {
+                Ok(categories[line_num as usize - 1].clone())
+            } else {
+                err_exit!("bike category for your request was not found.");
+            }
+        } else if categories.len() > 1 {
+            err_exit!("Not enoughs params. Can't select 1 category.");
         } else if let Some(category) = categories.pop() {
             Ok(category)
         } else {
@@ -310,7 +320,15 @@ pub mod get {
         let mut where_sql_id: Vec<String> = vec![];
         let mut dyn_params: Vec<Box<dyn ToSql>> = Vec::new();
 
-        if !command.cleaned {
+        if command.cleaned {
+            for id in command.cleaned_id {
+                where_sql_id.push(format!(
+                    "b.id = ?{}",
+                    where_sql.len() + where_sql_id.len() + 1
+                ));
+                dyn_params.push(Box::new(id));
+            }
+        } else {
             if let Some(category) = command.category.get() {
                 where_sql.push(format!("c.abbr = ?{}", where_sql.len() + 1));
                 dyn_params.push(Box::new(category));
@@ -326,14 +344,16 @@ pub mod get {
                 where_sql.push(format!("b.name LIKE ?{}", where_sql.len() + 1));
                 dyn_params.push(Box::new(format!("%{}%", &name)));
             }
-        }
 
-        for id in command.cleaned_id {
-            where_sql_id.push(format!(
-                "b.id = ?{}",
-                where_sql.len() + where_sql_id.len() + 1
-            ));
-            dyn_params.push(Box::new(id));
+            if !command.raw_self_id.is_empty() {
+                for id in command.raw_self_id {
+                    where_sql_id.push(format!(
+                        "b.id = ?{}",
+                        where_sql.len() + where_sql_id.len() + 1
+                    ));
+                    dyn_params.push(Box::new(id));
+                }
+            }
         }
 
         if !where_sql.is_empty() || !where_sql_id.is_empty() {
@@ -539,11 +559,13 @@ pub mod get {
 
         select_sql.push_str("GROUP BY b.id, b.name, b.price, b.datestamp ORDER BY b.datestamp");
 
-        if command.funk.unwrap() != "info" {
+        if (command.funk.unwrap() != "info" && !command.get_first) || command.get_last {
             select_sql.push_str(" DESC");
         }
 
-        if command.lim > 0 {
+        if command.get_first || command.get_last {
+            select_sql.push_str(" LIMIT 1");
+        } else if command.lim > 0 {
             select_sql.push_str(&format!(" LIMIT {}", &command.lim));
         }
 
@@ -720,11 +742,13 @@ pub mod get {
 
         select_sql.push_str("GROUP BY r.id ORDER BY r.datestamp");
 
-        if command.funk.unwrap() != "info" {
+        if (command.funk.unwrap() != "info" && !command.get_first) || command.get_last {
             select_sql.push_str(" DESC");
         }
 
-        if command.lim > 0 {
+        if command.get_first || command.get_last {
+            select_sql.push_str(" LIMIT 1");
+        } else if command.lim > 0 {
             select_sql.push_str(&format!(" LIMIT {}", &command.lim));
         }
 
@@ -787,7 +811,23 @@ pub mod get {
                 ROW_NUMBER() OVER (ORDER BY l.datestamp DESC) AS row_num,
                 l.id AS lub_id,
                 l.datestamp AS date,
-                l.distance AS dist,
+                (
+                    SELECT COALESCE(SUM(r.distance), 0.00)
+                    FROM ride r
+                    WHERE r.bike_id = b.id
+                      AND r.datestamp <= l.datestamp
+                      AND r.datestamp > COALESCE(
+                            (
+                                SELECT pcl.datestamp
+                                FROM chain_lubrication pcl
+                                WHERE pcl.datestamp < l.datestamp
+                                  AND pcl.bike_id = l.bike_id
+                                ORDER BY pcl.datestamp DESC
+                                LIMIT 1
+                            ),
+                            '1982-07-12'
+                      )
+                ) AS dist,
                 COALESCE(l.annotation, '') AS ann,
                 concat(c.abbr, ':', b.id_in_cat) AS code
             FROM chain_lubrication l
@@ -888,8 +928,15 @@ pub mod get {
             }
         }
 
-        select_sql.push_str("GROUP BY l.id ORDER BY l.datestamp DESC");
-        if command.lim > 0 {
+        select_sql.push_str("GROUP BY l.id ORDER BY l.datestamp");
+
+        if (command.funk.unwrap() != "info" && !command.get_first) || command.get_last {
+            select_sql.push_str(" DESC");
+        }
+
+        if command.get_first || command.get_last {
+            select_sql.push_str(" LIMIT 1");
+        } else if command.lim > 0 {
             select_sql.push_str(&format!(" LIMIT {}", &command.lim));
         }
 

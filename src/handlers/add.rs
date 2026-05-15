@@ -1,6 +1,7 @@
+use anyhow::Result;
 use chrono::NaiveDate;
 use owo_colors::OwoColorize;
-use rusqlite::{Connection, Result, params};
+use rusqlite::{Connection, params};
 
 use crate::cli::structs::Command;
 use crate::db::models::{Bike, Category};
@@ -95,24 +96,15 @@ fn chain_lub(conn: &Connection, command: Command) -> Result<()> {
         Some(command.annotation.join(" "))
     };
 
-    let distance_between_lubs: f32 = conn.query_row(
-        "SELECT
-            COALESCE(SUM(r.distance), 0.00)
-        FROM ride r
-        WHERE bike_id = ?1 AND datestamp <= ?2",
-        params![bike.id, date],
-        |row| row.get(0),
-    )?;
-
     conn.execute(
-        "INSERT INTO chain_lubrication (bike_id, datestamp, distance, annotation) VALUES (?1, ?2, ?3, ?4)",
-        params![bike.id, date, distance_between_lubs, annotation],
+        "INSERT INTO chain_lubrication (bike_id, datestamp, annotation) VALUES (?1, ?2, ?3)",
+        params![bike.id, date, annotation],
     )?;
 
     println!(
         "{}",
         format!(
-            "Chain lubrication from {} - added.",
+            "Chain lubrication {} - added.",
             &date.format("%d.%m.%y").to_string()
         )
         .blue()

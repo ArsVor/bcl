@@ -1,5 +1,6 @@
+use anyhow::Result;
 use owo_colors::OwoColorize;
-use rusqlite::{Connection, Result, ToSql, params, params_from_iter};
+use rusqlite::{Connection, ToSql, params, params_from_iter};
 
 use crate::cli::structs::Command;
 use crate::db::queries::delete_unused_tags;
@@ -246,7 +247,6 @@ fn tag(conn: &Connection, command: Command) -> Result<()> {
     if tags_to_delete.is_empty() {
         suc_exit!("Nothing to do!");
     }
-    
 
     let del_all: bool;
 

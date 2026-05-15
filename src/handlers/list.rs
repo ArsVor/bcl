@@ -1,5 +1,6 @@
+use anyhow::Result;
 use owo_colors::OwoColorize;
-use rusqlite::{Connection, Result};
+use rusqlite::Connection;
 use tabled::Table;
 use tabled::settings::Style;
 

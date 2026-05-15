@@ -1,4 +1,5 @@
-use rusqlite::{Connection, Result, params};
+use anyhow::Result;
+use rusqlite::{Connection, params};
 
 use crate::cli::structs::Command;
 use crate::db::models::{
@@ -12,7 +13,7 @@ use crate::{err_exit, suc_exit};
 use super::helpers;
 use super::helpers::get::get_bike_or_exit;
 
-pub fn route(conn: Connection, mut command: Command) -> Result<()> {
+pub fn route(conn: Connection, command: Command) -> Result<()> {
     let obj = if let Some(obj) = command.object.get() {
         obj
     } else {
@@ -21,12 +22,6 @@ pub fn route(conn: Connection, mut command: Command) -> Result<()> {
             command.funk.unwrap()
         ));
     };
-
-    if !command.raw_self_id.is_empty() {
-        command.cleaned_id = command.raw_self_id.clone();
-    } else if !command.raw_hash_id.is_empty() {
-        command.cleaned_id = command.raw_hash_id.clone();
-    }
 
     match obj.as_str() {
         "bike" => bike(&conn, command),
@@ -39,7 +34,7 @@ pub fn route(conn: Connection, mut command: Command) -> Result<()> {
 }
 
 fn bike(conn: &Connection, command: Command) -> Result<()> {
-    let bike_id: i32 = if let Some(id) = command.absolute_id.get() {
+    let bike_id: i32 = if let Some(id) = command.get_self_id_if_single() {
         id as i32
     } else if let Some(id) = command.bike_id.get() {
         if let Some(abbr) = command.category.get() {
@@ -48,7 +43,7 @@ fn bike(conn: &Connection, command: Command) -> Result<()> {
             err_exit!("Bike for your request was not found.");
         }
     } else {
-        let id: Option<u32> = command.id.get();
+        let id: Option<u32> = command.get_hash_id_if_single();
         let mut bikes: Vec<BikeList> = helpers::get::bike(conn, command)?;
         let bike: BikeList = match (bikes.len(), id) {
             (0, _) => {
@@ -109,8 +104,13 @@ fn category(conn: &Connection, command: Command) -> Result<()> {
 }
 
 fn lub(conn: &Connection, command: Command) -> Result<()> {
-    let id: Option<u32> = command.id.get();
+    let id: Option<u32> = if command.raw_hash_id.len() == 1 {
+        Some(command.raw_hash_id[0])
+    } else {
+        None
+    };
     let mut lubs: Vec<ChainLubricationList> = helpers::get::chain_lub(conn, command)?;
+    println!("{}, {:?}", lubs.len(), id);
     let lub: ChainLubricationList = match (lubs.len(), id) {
         (0, _) => {
             err_exit!("Chain lubrication for your request was not found.");
@@ -151,7 +151,6 @@ fn ride(conn: &Connection, command: Command) -> Result<()> {
         unreachable!()
     };
 
-    
     match rides.len() {
         0 => {
             suc_exit!("Rides for your request was not found.");
@@ -159,7 +158,7 @@ fn ride(conn: &Connection, command: Command) -> Result<()> {
         1 => output::info::ride_info_single(&rides[0]),
         _ => {
             let report: RidesInfoReport = RidesInfoReport::from(rides, &command);
-    
+
             if command.output.is_none() {
                 output::info::ride_info(report);
             } else {
