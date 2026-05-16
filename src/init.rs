@@ -10,20 +10,30 @@ pub struct AppPaths {
     pub cache_dir: PathBuf,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct Config {
     pub database: Database,
+    pub units: Units,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct Database {
     pub path: PathBuf,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct Units {
+    pub distance: String,
+    pub currency: String,
 }
 
 pub fn create_default_config_file(config_file: &Path, data_dir: &Path) -> Result<()> {
     let db = data_dir.join("bcl.db");
 
-    let content = format!("[database]\npath = \"{}\"", db.display());
+    let content = format!(
+        "[database]\npath = \"{}\"\n\n[units]\ndistance = \"km\"\ncurrency = \"UAH\"",
+        db.display()
+    );
 
     std::fs::write(config_file, &content)?;
     Ok(())

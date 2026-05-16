@@ -1,5 +1,5 @@
 use super::parser::{self, multiple_id_pars};
-use crate::err_exit;
+use crate::{err_exit, init::Config};
 use anyhow::Result;
 use chrono::{Datelike, Local, NaiveDate};
 use rusqlite::Connection;
@@ -43,6 +43,7 @@ pub struct Command {
     pub cleaned: bool,
     pub get_first: bool,
     pub get_last: bool,
+    pub config: Config,
     pub update_data: Field<Box<Command>>,
 }
 
@@ -327,7 +328,7 @@ impl Date {
 }
 
 impl Command {
-    fn new() -> Command {
+    fn new(conf: Config) -> Command {
         Command {
             funk: Field::new(),
             object: Field::new(),
@@ -353,12 +354,13 @@ impl Command {
             cleaned: false,
             get_first: false,
             get_last: false,
+            config: conf,
             update_data: Field::new(),
         }
     }
 
-    pub fn from(conn: &Connection, mut args: Vec<String>) -> Result<Command> {
-        let mut command: Command = Command::new();
+    pub fn from(conn: &Connection, conf: Config, mut args: Vec<String>) -> Result<Command> {
+        let mut command: Command = Command::new(conf);
 
         if let Ok(number) = args[0].parse::<u32>() {
             command.raw_hash_id.push(number);
@@ -398,9 +400,12 @@ impl Command {
                 }
                 s if s.starts_with("upd:") => {
                     if let Some(update_data) = s.strip_prefix("upd:") {
-                        command
-                            .update_data
-                            .set(parser::update_data_parse(conn, update_data.to_string())?);
+                        let conf: Config = command.config.clone();
+                        command.update_data.set(parser::update_data_parse(
+                            conn,
+                            conf,
+                            update_data.to_string(),
+                        )?);
                     }
                 }
                 s if s.contains(':') => {

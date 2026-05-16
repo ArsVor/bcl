@@ -58,7 +58,7 @@ pub struct BuyList {
     pub tags: String,
     #[tabled(rename = "Product")]
     pub name: String,
-    #[tabled(rename = "Price (UAH)", format("{:.2}", self.price))]
+    #[tabled(format("{:.2}", self.price))] // rename after build.
     pub price: f32,
     #[tabled(rename = "Date")]
     pub date: NaiveDate,
@@ -150,7 +150,7 @@ pub struct RideList {
     pub bike: String,
     #[tabled(rename = "Date")]
     pub date: NaiveDate,
-    #[tabled(rename = "Distance (km)", format("{:.2}", self.distance))]
+    #[tabled(format("{:.2}", self.distance))] //rename after bulid.
     pub distance: f32,
     #[tabled(rename = "#tags")]
     pub tags: String,
@@ -176,7 +176,7 @@ pub struct ChainLubricationList {
     pub bike: String,
     #[tabled(rename = "Date")]
     pub date: NaiveDate,
-    #[tabled(rename = "Distance (km)", format("{:.2}", self.passed))]
+    #[tabled(format("{:.2}", self.passed))] //rename after bulid.
     pub passed: f32,
     #[tabled(rename = "Annotation")]
     pub annotation: String,

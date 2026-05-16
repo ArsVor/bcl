@@ -3,7 +3,7 @@ use lazy_regex::regex_is_match;
 use rusqlite::Connection;
 
 use super::structs::Command;
-use crate::err_exit;
+use crate::{err_exit, init::Config};
 
 pub fn get_bicycle_types(conn: &Connection) -> Result<Vec<String>> {
     let mut stmt = conn.prepare("SELECT abbr FROM category")?;
@@ -187,7 +187,11 @@ pub fn multiple_id_pars(val: String) -> Vec<u32> {
     id_vec
 }
 
-pub fn update_data_parse(conn: &Connection, data_str: String) -> Result<Option<Box<Command>>> {
+pub fn update_data_parse(
+    conn: &Connection,
+    conf: Config,
+    data_str: String,
+) -> Result<Option<Box<Command>>> {
     let mut args: Vec<String> = data_str
         .split(" ")
         .filter(|p| !p.is_empty())
@@ -204,5 +208,5 @@ pub fn update_data_parse(conn: &Connection, data_str: String) -> Result<Option<B
         }
     }
 
-    Ok(Some(Box::new(Command::from(conn, args)?)))
+    Ok(Some(Box::new(Command::from(conn, conf, args)?)))
 }

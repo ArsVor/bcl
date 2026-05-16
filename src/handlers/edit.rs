@@ -369,6 +369,7 @@ fn category(conn: &Connection, command: Command) -> Result<()> {
 }
 
 fn chain_lub(conn: &Connection, command: Command) -> Result<()> {
+    let distance_unit: String = command.config.units.distance.clone();
     let lubs: Vec<ChainLubricationList> = helpers::get::chain_lub(conn, command)?;
 
     for lub_def in lubs {
@@ -429,8 +430,8 @@ fn chain_lub(conn: &Connection, command: Command) -> Result<()> {
         println!(
             "{}",
             format!(
-                "Chain Lubrication - id:\"{0}\" modified to {1} {2} {3}km {4}",
-                lub.lub_id, lub.bike, lub.date, lub.passed, &annotation,
+                "Chain Lubrication - id:\"{0}\" modified to {1} {2} {3}{4} {5}",
+                lub.lub_id, lub.bike, lub.date, lub.passed, &distance_unit, &annotation,
             )
             .blue(),
         );

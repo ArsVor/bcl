@@ -198,6 +198,7 @@ fn ride(conn: &mut Connection, command: Command) -> Result<()> {
         );
     }
 
+    let distance_unit: String = command.config.units.distance.clone();
     let date: NaiveDate = command.date.to_naive();
     let bike: Bike = get_bike_or_exit(
         conn,
@@ -244,17 +245,18 @@ fn ride(conn: &mut Connection, command: Command) -> Result<()> {
     tx.commit()?;
 
     let msg = format!(
-        "After last chain lubrication you ride: {}km",
-        &after_lub_distance
+        "After last chain lubrication you ride: {}{}",
+        &after_lub_distance, &distance_unit
     );
 
     println!(
         "{}",
         format!(
-            "Ride {0}:{1} to {2}km from {3} - added",
+            "Ride {0}:{1} to {2}{3} from {4} - added",
             &command.category.unwrap(),
             &command.bike_id.unwrap(),
             &distance,
+            &distance_unit,
             &date.format("%d.%m.%y").to_string()
         )
         .blue()

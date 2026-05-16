@@ -1,6 +1,9 @@
 use indexmap::IndexMap;
 
-use crate::handlers::structs::{BuysInfoReport, RidesInfoReport};
+use crate::{
+    handlers::structs::{BuysInfoReport, RidesInfoReport},
+    init::Config,
+};
 
 struct GraphData {
     title: String,
@@ -13,7 +16,7 @@ struct GraphData {
     uncategorized: Option<f32>,
 }
 
-pub fn ride_graph(report: RidesInfoReport) {
+pub fn ride_graph(report: RidesInfoReport, config: Config) {
     let title_text: String = format!("{:>9} {} ~~", "~~ Rides", &report.iter_type);
     let val_title_text: String = format!("{:15}", "total distance:");
     let count_title_text: String = format!("{:15}", "ride count:");
@@ -23,7 +26,7 @@ pub fn ride_graph(report: RidesInfoReport) {
         data: report.distance_by_categories,
         count: report.rides_count,
         total_val: report.total_distance,
-        units: String::from("km"),
+        units: config.units.distance,
         count_title: count_title_text,
         val_title: val_title_text,
         uncategorized: None,
@@ -32,7 +35,7 @@ pub fn ride_graph(report: RidesInfoReport) {
     graph_h(graph_data);
 }
 
-pub fn buy_graph(report: BuysInfoReport) {
+pub fn buy_graph(report: BuysInfoReport, config: Config) {
     let title_text: String = format!("{:>9} {} ~~", "~~ Buys", &report.iter_type);
     let val_title_text: String = format!("{:15}", "total spend:");
     let count_title_text: String = format!("{:15}", "buys count:");
@@ -47,7 +50,7 @@ pub fn buy_graph(report: BuysInfoReport) {
         data: report.spend_by_categories,
         count: report.buys_count,
         total_val: report.total_spend,
-        units: String::from("UAH"),
+        units: config.units.currency,
         count_title: count_title_text,
         val_title: val_title_text,
         uncategorized: uncat,

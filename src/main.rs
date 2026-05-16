@@ -33,9 +33,11 @@ fn main() -> Result<()> {
         }
 
         let config = get_config(&config_file)?;
+        // println!("Confug: {:#?}", &config);
+        // suc_exit!("DONE!!!");
 
         let conn: Connection = open_connection_with_fk(&config.database.path)?;
-        let command: Command = Command::from(&conn, args)?;
+        let command: Command = Command::from(&conn, config, args)?;
         // println!("Command: {:#?}", &command);
         // suc_exit!("DONE!!!");
 

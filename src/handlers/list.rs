@@ -2,7 +2,7 @@ use anyhow::Result;
 use owo_colors::OwoColorize;
 use rusqlite::Connection;
 use tabled::Table;
-use tabled::settings::Style;
+use tabled::settings::{Format, Modify, Style, object::Cell};
 
 use crate::cli::structs::Command;
 use crate::db::models::{BikeList, BuyList, Category, ChainLubricationList, RideList};
@@ -81,6 +81,7 @@ fn bike(conn: &Connection, command: Command) -> Result<()> {
 }
 
 fn buy(conn: &Connection, command: Command) -> Result<()> {
+    let currency: String = command.config.units.currency.clone();
     let result: BuyResult = helpers::get::buy(conn, command)?;
 
     let buys: Vec<BuyList> = if let helpers::BuyResult::List(buys) = result {
@@ -91,6 +92,9 @@ fn buy(conn: &Connection, command: Command) -> Result<()> {
 
     if !buys.is_empty() {
         let mut table = Table::new(buys);
+        table.with(
+            Modify::new(Cell::new(0, 5)).with(Format::content(|_| format!("Price ({currency})"))),
+        );
         table.with(Style::rounded());
         println!("{}", &table);
     } else {
@@ -101,6 +105,7 @@ fn buy(conn: &Connection, command: Command) -> Result<()> {
 }
 
 fn ride(conn: &Connection, command: Command) -> Result<()> {
+    let distance_unit: String = command.config.units.distance.clone();
     let result: RideResult = helpers::get::ride(conn, command)?;
 
     let rides: Vec<RideList> = if let helpers::RideResult::List(rides) = result {
@@ -111,6 +116,10 @@ fn ride(conn: &Connection, command: Command) -> Result<()> {
 
     if !rides.is_empty() {
         let mut table = Table::new(rides);
+        table.with(
+            Modify::new(Cell::new(0, 4))
+                .with(Format::content(|_| format!("Distance ({distance_unit})"))),
+        );
         table.with(Style::rounded());
         println!("{}", &table);
     } else {
@@ -121,10 +130,15 @@ fn ride(conn: &Connection, command: Command) -> Result<()> {
 }
 
 fn chain_lub(conn: &Connection, command: Command) -> Result<()> {
+    let distance_unit: String = command.config.units.distance.clone();
     let lubs: Vec<ChainLubricationList> = helpers::get::chain_lub(conn, command)?;
 
     if !lubs.is_empty() {
         let mut table = Table::new(lubs);
+        table.with(
+            Modify::new(Cell::new(0, 4))
+                .with(Format::content(|_| format!("Passed ({distance_unit})"))),
+        );
         table.with(Style::rounded());
         println!("{}", &table);
     } else {

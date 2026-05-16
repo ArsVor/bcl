@@ -12,6 +12,7 @@ use crate::handlers::helpers::{
     get::{get_bike_or_exit, get_category_or_exit},
 };
 use crate::handlers::structs::FkIds;
+use crate::init::Config;
 use crate::{err_exit, suc_exit, warn};
 
 pub fn route(mut conn: Connection, mut command: Command) -> Result<()> {
@@ -116,6 +117,7 @@ fn bike(conn: &Connection, command: Command) -> Result<()> {
 }
 
 fn buy(conn: &mut Connection, command: Command) -> Result<()> {
+    let config: Config = command.config.clone();
     let mut set_sql: Vec<String> = Vec::new();
     let mut dyn_params: Vec<Box<dyn ToSql>> = Vec::new();
     let update_data: Box<Command> = command.update_data.unwrap();
@@ -155,7 +157,7 @@ fn buy(conn: &mut Connection, command: Command) -> Result<()> {
     };
 
     let updated_val = if let Some(val) = update_data.val.get() {
-        let formatted = format!("{}UAH ", &val);
+        let formatted = format!("{} ({})", &val, &config.units.currency);
         set_sql.push("price = ?".into());
         dyn_params.push(Box::new(val));
         formatted
@@ -370,6 +372,7 @@ fn cat(conn: &Connection, command: Command) -> Result<()> {
 }
 
 fn lub(conn: &Connection, command: Command) -> Result<()> {
+    let distance_unit: String = command.config.units.distance.clone();
     let mut set_sql: Vec<String> = Vec::new();
     let mut dyn_params: Vec<Box<dyn ToSql>> = Vec::new();
     let mut bike_abbr: String = String::new();
@@ -409,7 +412,7 @@ fn lub(conn: &Connection, command: Command) -> Result<()> {
     }
 
     if let Some(val) = update_data.val.get() {
-        updated_val = format!("{}km ", &val);
+        updated_val = format!("{}{} ", &val, &distance_unit);
         set_sql.push("distance = ?".into());
         dyn_params.push(Box::new(val));
     }
@@ -459,6 +462,7 @@ fn lub(conn: &Connection, command: Command) -> Result<()> {
 }
 
 fn ride(conn: &mut Connection, command: Command) -> Result<()> {
+    let distance_unit: String = command.config.units.distance.clone();
     let mut set_sql: Vec<String> = Vec::new();
     let mut dyn_params: Vec<Box<dyn ToSql>> = Vec::new();
     let update_data: Box<Command> = command.update_data.unwrap();
@@ -502,7 +506,7 @@ fn ride(conn: &mut Connection, command: Command) -> Result<()> {
     };
 
     let updated_val = if let Some(val) = update_data.val.get() {
-        let formatted = format!("{}km ", &val);
+        let formatted = format!("{}{} ", &val, &distance_unit);
         set_sql.push("distance = ?".into());
         dyn_params.push(Box::new(val));
         formatted
