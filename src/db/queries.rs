@@ -123,6 +123,7 @@ pub fn get_buy_id_with_tag(conn: &Connection, table: &str, name: &str) -> Result
 pub fn get_category(conn: &Connection, abbr: &str) -> Result<Option<Category>> {
     match conn.query_row(
         "SELECT 
+            ROW_NUMBER() OVER (ORDER BY c.id) AS row_num,
             c.id as id,
             c.abbr as abbr,
             c.name as name,
