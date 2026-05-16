@@ -245,7 +245,7 @@ fn ride(conn: &mut Connection, command: Command) -> Result<()> {
     tx.commit()?;
 
     let msg = format!(
-        "After last chain lubrication you ride: {}{}",
+        "After last chain lubrication you ride: {:.2}{}",
         &after_lub_distance, &distance_unit
     );
 
