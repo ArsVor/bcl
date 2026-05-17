@@ -127,6 +127,8 @@ pub fn clean_id(conn: &Connection, command: &mut Command, obj: &str) -> Result<(
 }
 
 pub mod get {
+    use owo_colors::colors::xterm::ElectricIndigo;
+
     use super::*;
 
     pub fn categories(conn: &Connection) -> Result<Vec<Category>> {
@@ -426,9 +428,16 @@ pub mod get {
     }
 
     pub fn buy(conn: &Connection, command: Command) -> Result<BuyResult> {
-        let mut select_sql: String = "
-            SELECT 
-                ROW_NUMBER() OVER (ORDER BY c.id) AS row_num,
+        let sorting_direction: String =
+            if (command.funk.unwrap() != "info" && !command.get_first) || command.get_last {
+                " DESC".to_string()
+            } else {
+                String::new()
+            };
+
+        let mut select_sql: String = format!(
+            "SELECT 
+                ROW_NUMBER() OVER (ORDER BY b.datestamp{}) AS row_num,
                 b.id AS buy_id,
                 b.name AS buy_name,
                 b.price AS buy_price,
@@ -451,9 +460,9 @@ pub mod get {
             LEFT JOIN buy_to_category bc ON bc.buy_id = b.id
             LEFT JOIN category c ON c.id = bc.category_id
             LEFT JOIN buy_to_bike bbk ON bbk.buy_id = b.id
-            LEFT JOIN bike bk ON bk.id = bbk.bike_id
-        "
-        .to_string();
+            LEFT JOIN bike bk ON bk.id = bbk.bike_id",
+            &sorting_direction
+        );
 
         let mut conditions: Vec<String> = vec![];
         let mut dyn_params: Vec<Box<dyn ToSql>> = Vec::new();
@@ -599,9 +608,7 @@ pub mod get {
 
         select_sql.push_str(" GROUP BY b.id, b.name, b.price, b.datestamp ORDER BY b.datestamp");
 
-        if (command.funk.unwrap() != "info" && !command.get_first) || command.get_last {
-            select_sql.push_str(" DESC");
-        }
+        select_sql.push_str(&sorting_direction);
 
         if command.get_first || command.get_last {
             select_sql.push_str(" LIMIT 1");
@@ -642,9 +649,16 @@ pub mod get {
     }
 
     pub fn ride(conn: &Connection, command: Command) -> Result<RideResult> {
-        let mut select_sql: String = "
-            SELECT
-                ROW_NUMBER() OVER (ORDER BY c.id) AS row_num,
+        let sorting_direction: String =
+            if (command.funk.unwrap() != "info" && !command.get_first) || command.get_last {
+                " DESC".to_string()
+            } else {
+                String::new()
+            };
+
+        let mut select_sql: String = format!(
+            "SELECT
+                ROW_NUMBER() OVER (ORDER BY r.datestamp{}) AS row_num,
                 r.id AS ride_id,
                 r.datestamp AS date,
                 r.distance AS distance,
@@ -657,9 +671,9 @@ pub mod get {
             LEFT JOIN tag_to_ride tr ON r.id = tr.ride_id
             LEFT JOIN tag t ON tr.tag_id = t.id
             LEFT JOIN bike b ON r.bike_id = b.id
-            LEFT JOIN category c ON b.category_id = c.id
-        "
-        .to_string();
+            LEFT JOIN category c ON b.category_id = c.id",
+            &sorting_direction
+        );
 
         let mut conditions: Vec<String> = vec![];
         let mut dyn_params: Vec<Box<dyn ToSql>> = Vec::new();
@@ -803,11 +817,9 @@ pub mod get {
             select_sql.push_str(&conditions.join(" AND "));
         }
 
-        select_sql.push_str("GROUP BY r.id ORDER BY r.datestamp");
+        select_sql.push_str(" GROUP BY r.id ORDER BY r.datestamp");
 
-        if (command.funk.unwrap() != "info" && !command.get_first) || command.get_last {
-            select_sql.push_str(" DESC");
-        }
+        select_sql.push_str(&sorting_direction);
 
         if command.get_first || command.get_last {
             select_sql.push_str(" LIMIT 1");
@@ -848,9 +860,16 @@ pub mod get {
     }
 
     pub fn chain_lub(conn: &Connection, command: Command) -> Result<Vec<ChainLubricationList>> {
-        let mut select_sql: String = "
-            SELECT
-                ROW_NUMBER() OVER (ORDER BY l.datestamp DESC) AS row_num,
+        let sorting_direction: String =
+            if (command.funk.unwrap() != "info" && !command.get_first) || command.get_last {
+                " DESC".to_string()
+            } else {
+                String::new()
+            };
+
+        let mut select_sql: String = format!(
+            "SELECT
+                ROW_NUMBER() OVER (ORDER BY l.datestamp{}) AS row_num,
                 l.id AS lub_id,
                 l.datestamp AS date,
                 (
@@ -874,9 +893,9 @@ pub mod get {
                 concat(c.abbr, ':', b.id_in_cat) AS code
             FROM chain_lubrication l
             JOIN bike b ON b.id = l.bike_id
-            JOIN category c ON c.id = b.category_id
-        "
-        .to_string();
+            JOIN category c ON c.id = b.category_id",
+            &sorting_direction
+        );
 
         let mut where_sql: Vec<String> = vec![];
         let mut where_sql_id: Vec<String> = vec![];
@@ -970,11 +989,9 @@ pub mod get {
             }
         }
 
-        select_sql.push_str("GROUP BY l.id ORDER BY l.datestamp");
+        select_sql.push_str(" GROUP BY l.id ORDER BY l.datestamp");
 
-        if (command.funk.unwrap() != "info" && !command.get_first) || command.get_last {
-            select_sql.push_str(" DESC");
-        }
+        select_sql.push_str(&sorting_direction);
 
         if command.get_first || command.get_last {
             select_sql.push_str(" LIMIT 1");
