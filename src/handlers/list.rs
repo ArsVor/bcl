@@ -22,8 +22,6 @@ pub fn route(conn: Connection, mut command: Command) -> Result<()> {
 
     if !command.raw_self_id.is_empty() {
         command.cleaned_id = command.raw_self_id.clone();
-    } else if !command.raw_hash_id.is_empty() {
-        command.cleaned_id = command.raw_hash_id.clone();
     }
 
     match obj.as_str() {

@@ -304,7 +304,7 @@ impl Buy {
 impl BuyList {
     pub fn from_row(row: &Row) -> Result<Self> {
         Ok(Self {
-            id: 0,
+            id: row.get("row_num")?,
             self_id: row.get("buy_id")?,
             target: row.get("bike_or_category")?,
             tags: row.get("tags")?,

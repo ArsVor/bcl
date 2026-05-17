@@ -1,7 +1,8 @@
+use anyhow::Result;
 use std::collections::HashSet;
 
 use chrono::NaiveDate;
-use rusqlite::{Connection, OptionalExtension, Result, Transaction, params};
+use rusqlite::{Connection, OptionalExtension, ToSql, Transaction, params, params_from_iter};
 
 use crate::{cli::structs::Command, err_exit};
 
@@ -48,7 +49,7 @@ pub fn get_bike(conn: &Connection, abbr: &str, bike_id: u8) -> Result<Option<Bik
     ) {
         Ok(bike) => Ok(Some(bike)),
         Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-        Err(e) => Err(e),
+        Err(e) => Err(e.into()),
     }
 }
 
@@ -135,8 +136,63 @@ pub fn get_category(conn: &Connection, abbr: &str) -> Result<Option<Category>> {
     ) {
         Ok(category) => Ok(Some(category)),
         Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-        Err(e) => Err(e),
+        Err(e) => Err(e.into()),
     }
+}
+
+pub fn get_included_excluded_tags_id(
+    conn: &Connection,
+    command: Command,
+) -> Result<(HashSet<i32>, HashSet<i32>)> {
+    let mut include_id: HashSet<i32> = HashSet::new();
+    let mut exclude_id: HashSet<i32> = HashSet::new();
+    let base_sql: String = "SELECT id FROM tag WHERE name IN".to_string();
+
+    if !command.include_tags.is_empty() {
+        let mut dyn_params: Vec<Box<dyn ToSql>> = Vec::new();
+        let placeholders = std::iter::repeat_n("?", command.include_tags.len())
+            .collect::<Vec<_>>()
+            .join(",");
+        let where_sql: String = format!("{} ({})", &base_sql, &placeholders);
+
+        for tag in command.include_tags {
+            dyn_params.push(Box::new(tag));
+        }
+
+        let mut stmt = conn.prepare(&where_sql)?;
+        let result = stmt.query_map(
+            params_from_iter(dyn_params.iter().map(|b| b.as_ref())),
+            |row| row.get::<_, i32>(0),
+        )?;
+
+        for id in result {
+            include_id.extend(id);
+        }
+    }
+
+    if !command.exclude_tags.is_empty() {
+        let mut dyn_params: Vec<Box<dyn ToSql>> = Vec::new();
+        let placeholders = std::iter::repeat_n("?", command.exclude_tags.len())
+            .collect::<Vec<_>>()
+            .join(",");
+        let where_sql: String = format!("{} ({})", &base_sql, &placeholders);
+
+        for tag in command.exclude_tags {
+            dyn_params.push(Box::new(tag));
+        }
+
+        let mut stmt = conn.prepare(&where_sql)?;
+        let result = stmt.query_map(
+            params_from_iter(dyn_params.iter().map(|b| b.as_ref())),
+            |row| row.get::<_, i32>(0),
+        )?;
+
+        for id in result {
+            exclude_id.extend(id);
+        }
+    }
+
+    Ok((include_id, exclude_id))
 }
 
 pub fn get_included_excluded(

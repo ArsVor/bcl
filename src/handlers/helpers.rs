@@ -13,7 +13,7 @@ use crate::db::models::{
     BikeList, BuyInfo, BuyList, Category, ChainLubricationList, RideInfo, RideList,
 };
 use crate::db::queries::get_included_excluded;
-use crate::{err_exit, suc_exit, warn};
+use crate::{empty_exit, err_exit, suc_exit, warn};
 
 pub enum BuyResult {
     List(Vec<BuyList>),
@@ -127,7 +127,7 @@ pub mod get {
 
     use crate::db::{
         models::{Bike, BikeInfo, CategoryInfo},
-        queries::{get_bike, get_category},
+        queries::{get_bike, get_category, get_included_excluded_tags_id},
     };
 
     use super::*;
@@ -431,6 +431,7 @@ pub mod get {
     pub fn buy(conn: &Connection, command: Command) -> Result<BuyResult> {
         let mut select_sql: String = "
             SELECT 
+                ROW_NUMBER() OVER (ORDER BY c.id) AS row_num,
                 b.id AS buy_id,
                 b.name AS buy_name,
                 b.price AS buy_price,
@@ -457,8 +458,7 @@ pub mod get {
         "
         .to_string();
 
-        let mut where_sql: Vec<String> = vec![];
-        let mut where_sql_id: Vec<String> = vec![];
+        let mut conditions: Vec<String> = vec![];
         let mut dyn_params: Vec<Box<dyn ToSql>> = Vec::new();
         let mut date: Option<NaiveDate> = None;
         let mut date_lt: Option<NaiveDate> = None;
@@ -486,78 +486,121 @@ pub mod get {
         let category: Option<String> = command.category.get();
 
         if let Some(absolute_id) = command.absolute_id.get() {
-            where_sql.push(format!("b.id = ?{}", where_sql.len() + 1));
+            conditions.push(format!("b.id = ?{}", conditions.len() + 1));
             dyn_params.push(Box::new(absolute_id));
         }
 
         if val.is_some() {
-            where_sql.push(format!("b.price = ?{}", where_sql.len() + 1));
+            conditions.push(format!("b.price = ?{}", conditions.len() + 1));
             dyn_params.push(Box::new(val.unwrap()));
         } else {
             if val_gt.is_some() {
-                where_sql.push(format!("b.price > ?{}", where_sql.len() + 1));
+                conditions.push(format!("b.price > ?{}", conditions.len() + 1));
                 dyn_params.push(Box::new(val_gt.unwrap()));
             }
             if val_lt.is_some() {
-                where_sql.push(format!("b.price < ?{}", where_sql.len() + 1));
+                conditions.push(format!("b.price < ?{}", conditions.len() + 1));
                 dyn_params.push(Box::new(val_lt.unwrap()));
             }
         }
 
         if let Some(date) = date {
-            where_sql.push(format!("b.datestamp = ?{}", where_sql.len() + 1));
+            conditions.push(format!("b.datestamp = ?{}", conditions.len() + 1));
             dyn_params.push(Box::new(date));
         }
 
         if let Some(date_gt) = date_gt {
-            where_sql.push(format!("b.datestamp > ?{}", where_sql.len() + 1));
+            conditions.push(format!("b.datestamp > ?{}", conditions.len() + 1));
             dyn_params.push(Box::new(date_gt));
         }
 
         if let Some(date_lt) = date_lt {
-            where_sql.push(format!("b.datestamp < ?{}", where_sql.len() + 1));
+            conditions.push(format!("b.datestamp < ?{}", conditions.len() + 1));
             dyn_params.push(Box::new(date_lt));
         }
 
         if let Some(category) = category {
-            where_sql.push(format!("c.abbr = ?{}", where_sql.len() + 1));
+            conditions.push(format!("c.abbr = ?{}", conditions.len() + 1));
             dyn_params.push(Box::new(category));
         }
 
         if let Some(bike_id) = bike_id {
-            where_sql.push(format!("bk.id_in_cat = ?{}", where_sql.len() + 1));
+            conditions.push(format!("bk.id_in_cat = ?{}", conditions.len() + 1));
             dyn_params.push(Box::new(bike_id));
         }
 
         if !command.annotation.is_empty() {
             let name: String = command.annotation.join(" ");
-            where_sql.push(format!("b.name LIKE ?{}", where_sql.len() + 1));
+            conditions.push(format!("b.name LIKE ?{}", conditions.len() + 1));
             dyn_params.push(Box::new(format!("%{}%", &name)));
         }
 
-        for id in command.cleaned_id.clone() {
-            where_sql_id.push(format!(
-                "b.id = ?{}",
-                where_sql.len() + where_sql_id.len() + 1
-            ));
-            dyn_params.push(Box::new(id));
-        }
+        if !command.cleaned_id.is_empty() {
+            let placeholders = std::iter::repeat_n("?", command.cleaned_id.len())
+                .collect::<Vec<_>>()
+                .join(",");
 
-        if !where_sql.is_empty() || !where_sql_id.is_empty() {
-            select_sql.push_str(" WHERE ");
-            select_sql.push_str(&where_sql.join(" AND "));
-
-            if !where_sql_id.is_empty() {
-                if !where_sql.is_empty() {
-                    select_sql.push_str(" AND");
-                }
-                select_sql.push_str(" ( ");
-                select_sql.push_str(&where_sql_id.join(" OR "));
-                select_sql.push_str(" ) ");
+            for id in &command.cleaned_id {
+                dyn_params.push(Box::new(*id));
             }
+
+            conditions.push(format!("b.id IN ({})", &placeholders));
         }
 
-        select_sql.push_str("GROUP BY b.id, b.name, b.price, b.datestamp ORDER BY b.datestamp");
+        let (include_id, exclude_id): (HashSet<i32>, HashSet<i32>) =
+            get_included_excluded_tags_id(conn, command.clone())?;
+
+        if !command.include_tags.is_empty() && include_id.is_empty() {
+            empty_exit!("Nothing found for your query.");
+        }
+
+        if !include_id.is_empty() {
+            let include_id_len: usize = include_id.len();
+            let placeholders = std::iter::repeat_n("?", include_id_len)
+                .collect::<Vec<_>>()
+                .join(",");
+
+            for id in include_id {
+                dyn_params.push(Box::new(id));
+            }
+
+            conditions.push(format!(
+                "b.id IN (
+                    SELECT buy_id
+                    FROM tag_to_buy
+                    WHERE tag_id IN ({})
+                    GROUP BY buy_id
+                    HAVING COUNT(DISTINCT tag_id) = {}
+                )",
+                &placeholders, include_id_len
+            ));
+        }
+
+        if !exclude_id.is_empty() {
+            let placeholders = std::iter::repeat_n("?", exclude_id.len())
+                .collect::<Vec<_>>()
+                .join(",");
+
+            for id in exclude_id {
+                dyn_params.push(Box::new(id));
+            }
+
+            conditions.push(format!(
+                "b.id NOT IN (
+                    SELECT buy_id
+                    FROM tag_to_buy
+                    WHERE tag_id IN ({})
+                )",
+                &placeholders
+            ));
+        }
+
+        if !conditions.is_empty() {
+            select_sql.push_str(" WHERE ");
+            select_sql.push_str(&conditions.join(" AND "));
+        }
+
+        select_sql.push_str(" GROUP BY b.id, b.name, b.price, b.datestamp ORDER BY b.datestamp");
 
         if (command.funk.unwrap() != "info" && !command.get_first) || command.get_last {
             select_sql.push_str(" DESC");
@@ -569,48 +612,28 @@ pub mod get {
             select_sql.push_str(&format!(" LIMIT {}", &command.lim));
         }
 
-        let (include_id, exclude_id): (HashSet<i32>, HashSet<i32>) =
-            get_included_excluded(conn, command.clone(), "buy")?;
-
         let mut stmt = conn.prepare(&select_sql)?;
 
         let result: BuyResult = if let Some(funk) = command.funk.get() {
             match funk.as_str() {
                 "info" => {
-                    let buys_iter = stmt.query_map(
-                        params_from_iter(dyn_params.iter().map(|b| b.as_ref())),
-                        BuyInfo::from_row,
-                    )?;
+                    let buys: Vec<BuyInfo> = stmt
+                        .query_map(
+                            params_from_iter(dyn_params.iter().map(|b| b.as_ref())),
+                            BuyInfo::from_row,
+                        )?
+                        .collect::<Result<Vec<_>, _>>()?;
 
-                    let mut buys: Vec<BuyInfo> = Vec::new();
-                    for buy_result in buys_iter {
-                        let buy: BuyInfo = buy_result?;
-                        if (include_id.contains(&buy.buy_id) || include_id.is_empty())
-                            && !exclude_id.contains(&buy.buy_id)
-                        {
-                            buys.push(buy);
-                        }
-                    }
                     BuyResult::Info(buys)
                 }
                 _ => {
-                    let buys_iter = stmt.query_map(
-                        params_from_iter(dyn_params.iter().map(|b| b.as_ref())),
-                        BuyList::from_row,
-                    )?;
+                    let buys: Vec<BuyList> = stmt
+                        .query_map(
+                            params_from_iter(dyn_params.iter().map(|b| b.as_ref())),
+                            BuyList::from_row,
+                        )?
+                        .collect::<Result<Vec<_>, _>>()?;
 
-                    let mut buys: Vec<BuyList> = Vec::new();
-                    let mut num = 1;
-                    for buy_result in buys_iter {
-                        let mut buy: BuyList = buy_result?;
-                        if (include_id.contains(&buy.self_id) || include_id.is_empty())
-                            && !exclude_id.contains(&buy.self_id)
-                        {
-                            buy.id = num;
-                            num += 1;
-                            buys.push(buy);
-                        }
-                    }
                     BuyResult::List(buys)
                 }
             }
