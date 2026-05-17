@@ -1,6 +1,6 @@
 use anyhow::Result;
 use chrono::NaiveDate;
-use rusqlite::{Connection, ToSql, params_from_iter};
+use rusqlite::{Connection, ToSql, params, params_from_iter};
 use std::collections::HashSet;
 use std::env;
 use std::fs::read_to_string;
@@ -8,11 +8,15 @@ use std::io::Write;
 use std::process;
 use tempfile::NamedTempFile;
 
-use crate::cli::structs::{Command, Field};
-use crate::db::models::{
-    BikeList, BuyInfo, BuyList, Category, ChainLubricationList, RideInfo, RideList,
+use crate::db::{
+    models::{
+        Bike, BikeInfo, BikeList, BuyInfo, BuyList, Category, CategoryInfo, ChainLubricationList,
+        RideInfo, RideList,
+    },
+    queries::{get_bike, get_category, get_obj_id_with_included_excluded_tags},
 };
-use crate::db::queries::get_included_excluded;
+
+use crate::cli::structs::{Command, Field};
 use crate::{empty_exit, err_exit, suc_exit, warn};
 
 pub enum BuyResult {
@@ -123,13 +127,6 @@ pub fn clean_id(conn: &Connection, command: &mut Command, obj: &str) -> Result<(
 }
 
 pub mod get {
-    use rusqlite::params;
-
-    use crate::db::{
-        models::{Bike, BikeInfo, CategoryInfo},
-        queries::{get_bike, get_category, get_included_excluded_tags_id},
-    };
-
     use super::*;
 
     pub fn categories(conn: &Connection) -> Result<Vec<Category>> {
@@ -548,7 +545,7 @@ pub mod get {
         }
 
         let (include_id, exclude_id): (HashSet<i32>, HashSet<i32>) =
-            get_included_excluded_tags_id(conn, command.clone())?;
+            get_obj_id_with_included_excluded_tags(conn, command.clone())?;
 
         if !command.include_tags.is_empty() && include_id.is_empty() {
             empty_exit!("Nothing found for your query.");
@@ -647,6 +644,7 @@ pub mod get {
     pub fn ride(conn: &Connection, command: Command) -> Result<RideResult> {
         let mut select_sql: String = "
             SELECT
+                ROW_NUMBER() OVER (ORDER BY c.id) AS row_num,
                 r.id AS ride_id,
                 r.datestamp AS date,
                 r.distance AS distance,
@@ -663,8 +661,7 @@ pub mod get {
         "
         .to_string();
 
-        let mut where_sql: Vec<String> = vec![];
-        let mut where_sql_id: Vec<String> = vec![];
+        let mut conditions: Vec<String> = vec![];
         let mut dyn_params: Vec<Box<dyn ToSql>> = Vec::new();
         let mut date: Option<NaiveDate> = None;
         let mut date_lt: Option<NaiveDate> = None;
@@ -692,75 +689,118 @@ pub mod get {
         let category: Option<String> = command.category.get();
 
         if let Some(absolute_id) = command.absolute_id.get() {
-            where_sql.push(format!("r.id = ?{}", where_sql.len() + 1));
+            conditions.push(format!("r.id = ?{}", conditions.len() + 1));
             dyn_params.push(Box::new(absolute_id));
         }
 
         if val.is_some() {
-            where_sql.push(format!("r.distance = ?{}", where_sql.len() + 1));
+            conditions.push(format!("r.distance = ?{}", conditions.len() + 1));
             dyn_params.push(Box::new(val.unwrap()));
         } else {
             if val_gt.is_some() {
-                where_sql.push(format!("r.distance > ?{}", where_sql.len() + 1));
+                conditions.push(format!("r.distance > ?{}", conditions.len() + 1));
                 dyn_params.push(Box::new(val_gt.unwrap()));
             }
             if val_lt.is_some() {
-                where_sql.push(format!("r.distance < ?{}", where_sql.len() + 1));
+                conditions.push(format!("r.distance < ?{}", conditions.len() + 1));
                 dyn_params.push(Box::new(val_lt.unwrap()));
             }
         }
 
         if let Some(date) = date {
-            where_sql.push(format!("r.datestamp = ?{}", where_sql.len() + 1));
+            conditions.push(format!("r.datestamp = ?{}", conditions.len() + 1));
             dyn_params.push(Box::new(date));
         }
 
         if let Some(date_gt) = date_gt {
-            where_sql.push(format!("r.datestamp > ?{}", where_sql.len() + 1));
+            conditions.push(format!("r.datestamp > ?{}", conditions.len() + 1));
             dyn_params.push(Box::new(date_gt));
         }
 
         if let Some(date_lt) = date_lt {
-            where_sql.push(format!("r.datestamp < ?{}", where_sql.len() + 1));
+            conditions.push(format!("r.datestamp < ?{}", conditions.len() + 1));
             dyn_params.push(Box::new(date_lt));
         }
 
         if let Some(category) = category {
-            where_sql.push(format!("c.abbr = ?{}", where_sql.len() + 1));
+            conditions.push(format!("c.abbr = ?{}", conditions.len() + 1));
             dyn_params.push(Box::new(category));
         }
 
         if let Some(bike_id) = bike_id {
-            where_sql.push(format!("b.id_in_cat = ?{}", where_sql.len() + 1));
+            conditions.push(format!("b.id_in_cat = ?{}", conditions.len() + 1));
             dyn_params.push(Box::new(bike_id));
         }
 
         if !command.annotation.is_empty() {
             let name: String = command.annotation.join(" ");
-            where_sql.push(format!("r.annotation LIKE ?{}", where_sql.len() + 1));
+            conditions.push(format!("r.annotation LIKE ?{}", conditions.len() + 1));
             dyn_params.push(Box::new(format!("%{}%", &name)));
         }
 
-        for id in command.cleaned_id.clone() {
-            where_sql_id.push(format!(
-                "r.id = ?{}",
-                where_sql.len() + where_sql_id.len() + 1
-            ));
-            dyn_params.push(Box::new(id));
+        if !command.cleaned_id.is_empty() {
+            let placeholders = std::iter::repeat_n("?", command.cleaned_id.len())
+                .collect::<Vec<_>>()
+                .join(",");
+
+            for id in &command.cleaned_id {
+                dyn_params.push(Box::new(*id));
+            }
+
+            conditions.push(format!("r.id IN ({})", &placeholders));
         }
 
-        if !where_sql.is_empty() || !where_sql_id.is_empty() {
-            select_sql.push_str(" WHERE ");
-            select_sql.push_str(&where_sql.join(" AND "));
+        let (include_id, exclude_id): (HashSet<i32>, HashSet<i32>) =
+            get_obj_id_with_included_excluded_tags(conn, command.clone())?;
 
-            if !where_sql_id.is_empty() {
-                if !where_sql.is_empty() {
-                    select_sql.push_str(" AND");
-                }
-                select_sql.push_str(" ( ");
-                select_sql.push_str(&where_sql_id.join(" OR "));
-                select_sql.push_str(" ) ");
+        if !command.include_tags.is_empty() && include_id.is_empty() {
+            empty_exit!("Nothing found for your query.");
+        }
+
+        if !include_id.is_empty() {
+            let include_id_len: usize = include_id.len();
+            let placeholders = std::iter::repeat_n("?", include_id_len)
+                .collect::<Vec<_>>()
+                .join(",");
+
+            for id in include_id {
+                dyn_params.push(Box::new(id));
             }
+
+            conditions.push(format!(
+                "r.id IN (
+                    SELECT ride_id
+                    FROM tag_to_ride
+                    WHERE tag_id IN ({})
+                    GROUP BY ride_id
+                    HAVING COUNT(DISTINCT tag_id) = {}
+                )",
+                &placeholders, include_id_len
+            ));
+        }
+
+        if !exclude_id.is_empty() {
+            let placeholders = std::iter::repeat_n("?", exclude_id.len())
+                .collect::<Vec<_>>()
+                .join(",");
+
+            for id in exclude_id {
+                dyn_params.push(Box::new(id));
+            }
+
+            conditions.push(format!(
+                "r.id NOT IN (
+                    SELECT ride_id
+                    FROM tag_to_ride
+                    WHERE tag_id IN ({})
+                )",
+                &placeholders
+            ));
+        }
+
+        if !conditions.is_empty() {
+            select_sql.push_str(" WHERE ");
+            select_sql.push_str(&conditions.join(" AND "));
         }
 
         select_sql.push_str("GROUP BY r.id ORDER BY r.datestamp");
@@ -775,49 +815,28 @@ pub mod get {
             select_sql.push_str(&format!(" LIMIT {}", &command.lim));
         }
 
-        let (include_id, exclude_id): (HashSet<i32>, HashSet<i32>) =
-            get_included_excluded(conn, command.clone(), "ride")?;
-
         let mut stmt = conn.prepare(&select_sql)?;
 
         let result: RideResult = if let Some(funk) = command.funk.get() {
             match funk.as_str() {
                 "info" => {
-                    let rides_iter = stmt.query_map(
-                        params_from_iter(dyn_params.iter().map(|b| b.as_ref())),
-                        RideInfo::from_row,
-                    )?;
+                    let rides: Vec<RideInfo> = stmt
+                        .query_map(
+                            params_from_iter(dyn_params.iter().map(|b| b.as_ref())),
+                            RideInfo::from_row,
+                        )?
+                        .collect::<Result<Vec<_>, _>>()?;
 
-                    let mut rides: Vec<RideInfo> = Vec::new();
-
-                    for ride_result in rides_iter {
-                        let ride = ride_result?;
-                        if (include_id.contains(&ride.ride_id) || include_id.is_empty())
-                            && !exclude_id.contains(&ride.ride_id)
-                        {
-                            rides.push(ride);
-                        }
-                    }
                     RideResult::Info(rides)
                 }
                 _ => {
-                    let rides_iter = stmt.query_map(
-                        params_from_iter(dyn_params.iter().map(|b| b.as_ref())),
-                        RideList::from_row,
-                    )?;
+                    let rides: Vec<RideList> = stmt
+                        .query_map(
+                            params_from_iter(dyn_params.iter().map(|b| b.as_ref())),
+                            RideList::from_row,
+                        )?
+                        .collect::<Result<Vec<_>, _>>()?;
 
-                    let mut rides: Vec<RideList> = Vec::new();
-                    let mut num: i32 = 1;
-                    for ride_result in rides_iter {
-                        let mut ride = ride_result?;
-                        if (include_id.contains(&ride.ride_id) || include_id.is_empty())
-                            && !exclude_id.contains(&ride.ride_id)
-                        {
-                            ride.id = num;
-                            num += 1;
-                            rides.push(ride);
-                        }
-                    }
                     RideResult::List(rides)
                 }
             }

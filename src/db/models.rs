@@ -363,7 +363,7 @@ impl RideInfo {
 impl RideList {
     pub fn from_row(row: &Row) -> Result<Self> {
         Ok(Self {
-            id: 0,
+            id: row.get("row_num")?,
             ride_id: row.get("ride_id")?,
             bike: row.get("code")?,
             date: row.get("date")?,

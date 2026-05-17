@@ -140,7 +140,7 @@ pub fn get_category(conn: &Connection, abbr: &str) -> Result<Option<Category>> {
     }
 }
 
-pub fn get_included_excluded_tags_id(
+pub fn get_obj_id_with_included_excluded_tags(
     conn: &Connection,
     command: Command,
 ) -> Result<(HashSet<i32>, HashSet<i32>)> {
@@ -189,36 +189,6 @@ pub fn get_included_excluded_tags_id(
 
         for id in result {
             exclude_id.extend(id);
-        }
-    }
-
-    Ok((include_id, exclude_id))
-}
-
-pub fn get_included_excluded(
-    conn: &Connection,
-    command: Command,
-    table: &str,
-) -> Result<(HashSet<i32>, HashSet<i32>)> {
-    let mut include_id: HashSet<i32> = HashSet::new();
-    let mut exclude_id: HashSet<i32> = HashSet::new();
-
-    if !command.exclude_tags.is_empty() {
-        for tag in command.exclude_tags {
-            let id_set: HashSet<i32> = get_buy_id_with_tag(conn, table, tag.as_str())?;
-            exclude_id.extend(id_set);
-        }
-    }
-
-    if !command.include_tags.is_empty() {
-        for (i, tag) in command.include_tags.iter().enumerate() {
-            let id_set: HashSet<i32> = get_buy_id_with_tag(conn, table, tag.as_str())?;
-
-            if i == 0 {
-                include_id = id_set;
-            } else {
-                include_id = include_id.intersection(&id_set).copied().collect();
-            }
         }
     }
 
