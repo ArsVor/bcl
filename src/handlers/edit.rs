@@ -386,15 +386,11 @@ fn chain_lub(conn: &Connection, command: Command) -> Result<()> {
             UPDATE chain_lubrication
             SET
                 datestamp = ?1,
-                distance = ?2,
-                annotation = ?3
+                annotation = ?2
         "
         .to_string();
-        let mut dyn_params: Vec<Box<dyn ToSql>> = vec![
-            Box::new(lub.date),
-            Box::new(lub.passed),
-            Box::new(lub.annotation),
-        ];
+        let mut dyn_params: Vec<Box<dyn ToSql>> =
+            vec![Box::new(lub.date), Box::new(lub.annotation)];
 
         if lub.bike != lub_def.bike {
             let bike_code: Vec<String> =

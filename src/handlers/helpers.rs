@@ -1160,7 +1160,7 @@ pub mod editor {
         writeln!(tmp)?;
         writeln!(tmp, "bike: {}", lub.bike)?;
         writeln!(tmp, "date: {}", lub.date)?;
-        writeln!(tmp, "passed: {}", lub.passed)?;
+        writeln!(tmp, "passed: {} # read only", lub.passed)?;
         writeln!(tmp, "annotation: {}", lub.annotation)?;
 
         tmp.flush()?;
@@ -1183,7 +1183,6 @@ pub mod editor {
             match key {
                 "bike" => lub.bike = val.trim_ascii().to_string(),
                 "date" => lub.date = val.parse().unwrap_or(lub.date),
-                "passed" => lub.passed = val.parse().unwrap_or(lub.passed),
                 "annotation" => lub.annotation = val.trim_ascii().to_string(),
                 _ => {}
             }
