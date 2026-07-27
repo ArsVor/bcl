@@ -127,7 +127,6 @@ pub fn clean_id(conn: &Connection, command: &mut Command, obj: &str) -> Result<(
 }
 
 pub mod get {
-    use owo_colors::colors::xterm::ElectricIndigo;
 
     use super::*;
 
